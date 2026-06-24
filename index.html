@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>成长冒险岛 · 自律成长 v8.0 联网版</title>
+<title>成长冒险岛 · 自律成长 v8.1 联网版</title>
 <!-- ===== v7.6 PWA 改造：iPhone Safari「添加到主屏幕」全屏安装 ===== -->
 <meta name="description" content="成长冒险岛 · 孩子自律成长 APP（Supabase 多设备实时同步联网版）">
 <!-- PWA manifest -->
@@ -550,6 +550,16 @@ window.SUPABASE_CONFIG = {
 <input type="file" id="restoreFileInput" accept="application/json,.json" style="display:none" onchange="handleRestoreFile(event)">
 <script>
 /* ===================================================================
+ 成长冒险岛 · 自律成长 APP v8.1 联网版（原 Gracie 自律成长 APP）
+ v8.1 升级要点（多家庭邀请码 · 数据隔离）：
+   [FAM-1] 登录后无家庭不再自动建家庭，改标记 CLOUD._needFamily=true，弹「创建新家庭/输邀请码加入」二选一(mFamilyChoice)。
+   [FAM-2] createFamily()：建家庭并生成 6 位邀请码(family.invite_code)，创建者为 admin，弹码展示。
+   [FAM-3] joinFamilyByCode()：输码校验加入对应家庭(member.role=parent)，加入后共享同一份数据。
+   [FAM-4] doAuthLogin/doAuthSignup：登录/注册后若 _needFamily 则弹二选一；否则照常 PIN 校验。
+   [FAM-5] 多家庭隔离：数据按 family_id 经 RLS(my_family_id) 隔离，A 家庭无法看到/操作 B 家庭任何数据。
+   [FAM-6] 后台管理端「账号」页展示本家庭邀请码并支持一键复制分享。
+   存储键沿用 gracie_v3，旧数据经迁移工具平滑进入多家庭结构；既有功能与 RLS/Realtime/三端登录零冲突、零回退。
+ ---- 以下为 v8.0 历史升级要点（保留）----
  成长冒险岛 · 自律成长 APP v8.0 联网版（原 Gracie 自律成长 APP）
  v8.0 升级要点（Supabase 多设备实时同步联网版）：
    [DATA] root()/saveRoot()/R()/child()/saveChild() 内部改为读写内存缓存 CACHE，业务层同步接口不变；
@@ -875,6 +885,10 @@ const CLOUD = {
   realtimeCh:null,
   bc:null,            /* BroadcastChannel 跨标签页 */
   outbox:[],          /* 离线待补传 [{kind,childLocalId,data,ts}] */
+  _needFamily:false,  /* v8.1：登录后无家庭时为 true，触发「创建/加入家庭」二选一 */
+  inviteCode:null,    /* v8.1：当前家庭邀请码（登录后取回，后台可展示分享） */
+  familyName:null,
+  memberRole:null,
   ready:false
 };
 let CACHE=null;       /* 内存中的 root 对象（业务层的唯一数据源） */
@@ -913,13 +927,16 @@ async function cloudAfterLogin(){
   if(!CLOUD.sb||!CLOUD.session)return;
   try{
     const uid=CLOUD.session.user.id;
-    /* 找到该用户所属 family + 角色 */
     let {data:mem}=await CLOUD.sb.from('member').select('family_id,role').eq('auth_user_id',uid).limit(1);
-    if(!mem||!mem.length){ /* 首次登录：自动建家庭 + member(admin) */
-      const {data:fam}=await CLOUD.sb.from('family').insert({family_name:'我的家庭'}).select().single();
-      if(fam){await CLOUD.sb.from('member').insert({family_id:fam.id,auth_user_id:uid,role:'admin'});mem=[{family_id:fam.id,role:'admin'}];}
+    if(!mem||!mem.length){
+      CLOUD._needFamily=true;
+      CLOUD.familyId=null;
+      return;
     }
-    if(mem&&mem.length){CLOUD.familyId=mem[0].family_id;CLOUD.memberRole=mem[0].role;}
+    CLOUD._needFamily=false;
+    CLOUD.familyId=mem[0].family_id;CLOUD.memberRole=mem[0].role;
+    /* v8.1：取回本家庭邀请码，供后台管理端展示/分享 */
+    try{const {data:fam}=await CLOUD.sb.from('family').select('invite_code,family_name').eq('id',CLOUD.familyId).limit(1).single();if(fam){CLOUD.inviteCode=fam.invite_code;CLOUD.familyName=fam.family_name;}}catch(e){}
     await cloudPullAll();
     cloudSubscribeRealtime();
   }catch(e){console.warn('cloudAfterLogin 失败：',e);}
@@ -1852,7 +1869,7 @@ function markNotifsRead(){const r=R(),c=child(r);c.notifs.forEach(n=>{if(n.to===
 
 /* ===== 登录/角色 ===== */
 function renderLogin(){const r=R();
- let h='<div class="login"><div class="login-logo"><div class="big">🏝️</div><div class="t">成长冒险岛</div><div class="s">家长主控 · 孩子执行</div><div class="s" style="margin-top:2px;opacity:.7">v8.0 联网版</div><div class="s" id="cloudBadge" style="margin-top:2px;font-size:11px;opacity:.8"></div></div>';
+ let h='<div class="login"><div class="login-logo"><div class="big">🏝️</div><div class="t">成长冒险岛</div><div class="s">家长主控 · 孩子执行</div><div class="s" style="margin-top:2px;opacity:.7">v8.1 联网版 · 多家庭</div><div class="s" id="cloudBadge" style="margin-top:2px;font-size:11px;opacity:.8"></div></div>';
  h+='<div id="roleSelect">'+
   '<button class="role-card" onclick="goChildPick()"><span class="role-ico">👧</span><span class="role-info"><span class="role-t">孩子端</span><span class="role-d">打卡 · 商城 · 等级 · 看电视计时</span></span><span class="role-arrow">›</span></button>'+
   '<button class="role-card" onclick="goPin(\'parent\')"><span class="role-ico">👨‍👩‍👧</span><span class="role-info"><span class="role-t">家长端</span><span class="role-d">确认 · 配置规则 · 商城 · 看板 · 管账号</span></span><span class="role-arrow">›</span></button>'+
@@ -1871,7 +1888,7 @@ function renderLogin(){const r=R();
 /* 登录页云端状态徽标：显示「云端同步已启用/本地模式」与登录邮箱 */
 function updateCloudBadge(){const el=document.getElementById('cloudBadge');if(!el)return;
  if(typeof cloudConfigured==='function'&&cloudConfigured()){
-   if(CLOUD.session&&CLOUD.session.user){el.textContent='☁️ 云端同步已登录：'+CLOUD.session.user.email;}
+   if(CLOUD.session&&CLOUD.session.user){var fam=CLOUD.inviteCode?('｜家庭码 '+CLOUD.inviteCode):(CLOUD._needFamily?'｜待创建/加入家庭':'');el.textContent='☁️ 云端已登录：'+CLOUD.session.user.email+fam;}
    else{el.textContent='☁️ 已配置云端 · 家长/管理端登录需邮箱账号';}
  } else {el.textContent='📴 本地模式（未配置云端，仅本机/跨标签页同步）';}
 }
@@ -1917,6 +1934,7 @@ async function doAuthLogin(){
   const {data,error}=await CLOUD.sb.auth.signInWithPassword({email,password:pwd});
   if(error){setText('authErr','登录失败：'+error.message);return;}
   CLOUD.session=data.session;await cloudAfterLogin();
+  if(CLOUD._needFamily){closeM('mAuth');updateCloudBadge();openFamilyChoice();return;}
   closeM('mAuth');updateCloudBadge();
   goPinUI(AUTH_PENDING_ROLE==='admin'?'后台管理验证':'家长验证');
  }catch(e){setText('authErr','登录异常：'+(e&&e.message||e));}
@@ -1930,11 +1948,56 @@ async function doAuthSignup(){
  try{
   const {data,error}=await CLOUD.sb.auth.signUp({email,password:pwd});
   if(error){setText('authErr','注册失败：'+error.message);return;}
-  if(data.session){CLOUD.session=data.session;await cloudAfterLogin();closeM('mAuth');updateCloudBadge();goPinUI(AUTH_PENDING_ROLE==='admin'?'后台管理验证':'家长验证');}
+  if(data.session){
+    CLOUD.session=data.session;await cloudAfterLogin();
+    closeM('mAuth');updateCloudBadge();
+    if(CLOUD._needFamily){openFamilyChoice();return;}
+    goPinUI(AUTH_PENDING_ROLE==='admin'?'后台管理验证':'家长验证');
+  }
   else{setText('authErr','注册成功，请到邮箱确认后再登录（或在 Supabase 关闭邮箱确认）');}
  }catch(e){setText('authErr','注册异常：'+(e&&e.message||e));}
 }
-async function doAuthLogout(){try{if(CLOUD.sb){await CLOUD.sb.auth.signOut();}}catch(e){}CLOUD.session=null;CLOUD.familyId=null;updateCloudBadge();toast('已退出家庭账号');}
+/* ===== v8.1 多家庭邀请码：创建家庭 / 输码加入 / 二选一弹窗 ===== */
+function openFamilyChoice(){setText('fcErr','');sv('fcCode','');openM('mFamilyChoice');}
+function genInviteCode(){let s='';const ch='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';for(let i=0;i<6;i++)s+=ch[Math.floor(Math.random()*ch.length)];return s;}
+async function createFamily(){
+ if(!CLOUD.sb||!CLOUD.session){setText('fcErr','云端未就绪');return;}
+ setText('fcErr','正在创建家庭…');
+ try{
+  const uid=CLOUD.session.user.id;
+  let code='',ok=false,fam=null;
+  for(let i=0;i<6&&!ok;i++){
+   code=genInviteCode();
+   const {data,error}=await CLOUD.sb.from('family').insert({family_name:'我的家庭',invite_code:code}).select().single();
+   if(!error){fam=data;ok=true;}
+  }
+  if(!ok||!fam){setText('fcErr','创建失败，请重试');return;}
+  await CLOUD.sb.from('member').insert({family_id:fam.id,auth_user_id:uid,role:'admin'});
+  CLOUD.familyId=fam.id;CLOUD.memberRole='admin';CLOUD._needFamily=false;CLOUD.inviteCode=fam.invite_code;
+  await cloudPullAll();cloudSubscribeRealtime();
+  closeM('mFamilyChoice');
+  alert('🎉 家庭创建成功！\n\n你的家庭邀请码是：'+fam.invite_code+'\n\n把它发给另一台设备/家人，在登录后选「输入邀请码加入」即可共享同一份数据。\n（邀请码也可随时在后台管理端查看）');
+  goPinUI(AUTH_PENDING_ROLE==='admin'?'后台管理验证':'家长验证');
+ }catch(e){setText('fcErr','创建异常：'+(e&&e.message||e));}
+}
+async function joinFamilyByCode(){
+ if(!CLOUD.sb||!CLOUD.session){setText('fcErr','云端未就绪');return;}
+ const code=gv('fcCode').trim().toUpperCase();
+ if(!code){setText('fcErr','请输入邀请码');return;}
+ setText('fcErr','正在校验邀请码…');
+ try{
+  const uid=CLOUD.session.user.id;
+  const {data:fam,error}=await CLOUD.sb.from('family').select('id,family_name,invite_code').eq('invite_code',code).limit(1).single();
+  if(error||!fam){setText('fcErr','邀请码无效，请核对后重试');return;}
+  await CLOUD.sb.from('member').insert({family_id:fam.id,auth_user_id:uid,role:'parent'});
+  CLOUD.familyId=fam.id;CLOUD.memberRole='parent';CLOUD._needFamily=false;CLOUD.inviteCode=fam.invite_code;
+  await cloudPullAll();cloudSubscribeRealtime();
+  closeM('mFamilyChoice');
+  toast('✅ 已加入家庭：'+(fam.family_name||code));
+  goPinUI(AUTH_PENDING_ROLE==='admin'?'后台管理验证':'家长验证');
+ }catch(e){setText('fcErr','加入异常：'+(e&&e.message||e));}
+}
+async function doAuthLogout(){try{if(CLOUD.sb){await CLOUD.sb.auth.signOut();}}catch(e){}CLOUD.session=null;CLOUD.familyId=null;CLOUD._needFamily=false;CLOUD.inviteCode=null;CLOUD.memberRole=null;updateCloudBadge();toast('已退出家庭账号');}
 
 /* ===== v8.0 一次性数据迁移：现有本地 JSON 备份 → 云端 ===== */
 /* 复用现有「从备份恢复」选择文件入口；此函数把当前 CACHE/本地的全部孩子写入云端 child + child_state */
@@ -2039,7 +2102,21 @@ function adminOverview(r){
 }
 
 function adminAccounts(r){
- let h='<div class="card"><div class="ctitle">🔐 登录密码管理</div>';
+ let h='';
+ /* v8.1 多家庭：展示当前家庭与邀请码，便于分享给其它设备/家人加入同一家庭 */
+ var _engaged=(typeof cloudEngaged==='function'&&cloudEngaged());
+ if(_engaged){
+   var _code=CLOUD.inviteCode||'（登录后自动获取，或重新登录刷新）';
+   var _fname=CLOUD.familyName||'我的家庭';
+   h+='<div class="card" style="border:1.5px solid #A7F3D0;background:#ECFDF5"><div class="ctitle" style="color:#047857">🏠 我的家庭 · 邀请码</div>';
+   h+='<div class="irow"><span class="ilbl">家庭名称</span><span class="ival">'+_fname+'</span></div>';
+   h+='<div style="text-align:center;margin:10px 0"><div style="font-size:12px;color:#6B7280">邀请码（分享给家人/另一台设备）</div><div style="font-size:30px;font-weight:900;letter-spacing:4px;color:#047857;margin-top:4px">'+_code+'</div></div>';
+   h+='<button class="btn bo bsm bblock" onclick="adminCopyInvite()">📋 复制邀请码</button>';
+   h+='<div class="hint">另一台设备用任意家庭邮箱登录后，选「输入邀请码加入」并输入此码，即可共享本家庭的全部孩子数据；不同家庭之间数据完全隔离、互不可见。</div></div>';
+ } else if(typeof cloudConfigured==='function'&&cloudConfigured()){
+   h+='<div class="card" style="border:1.5px solid #FDE68A;background:#FFFBEB"><div class="ctitle" style="color:#B45309">🏠 家庭邀请码</div><div class="hint" style="margin-top:0">当前未登录家庭云端账号或离线，登录家庭账号后这里会显示本家庭的 6 位邀请码。</div></div>';
+ }
+ h+='<div class="card"><div class="ctitle">🔐 登录密码管理</div>';
  h+='<div class="cfg-row"><span class="nm">🛠️ 后台管理密码</span><button class="btn bo bsm" onclick="adminChangeAdminPwd()">修改</button></div>';
  h+='<div class="cfg-row"><span class="nm">👨‍👩‍👧 家长端密码</span><button class="btn bo bsm" onclick="adminChangeParentPwd()">修改</button></div>';
  h+='<div class="hint">三端密码相互独立：后台管理(默认8888)、家长端(默认1234)、各孩子端各自密码。建议首次使用后立即修改默认密码。</div></div>';
@@ -2108,6 +2185,7 @@ function adminData(r){
 }
 
 /* ===== admin 账号管理动作（均经 reqA 守卫） ===== */
+function adminCopyInvite(){if(!reqA())return;var code=CLOUD.inviteCode||'';if(!code){toast('暂无邀请码，请重新登录家庭账号');return;}try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(code);toast('已复制邀请码：'+code);}else{toast('邀请码：'+code);}}catch(e){toast('邀请码：'+code);}}
 function adminChangeAdminPwd(){if(!reqA())return;const v=prompt('设置新的后台管理密码（4位数字）：','');if(v===null)return;if(!/^\d{4}$/.test(v)){toast('请输入4位数字');return;}const r=R();r.adminCred=makeCred(v);saveRoot(r);toast('🔒 后台管理密码已更新');}
 function adminChangeParentPwd(){if(!reqA())return;const v=prompt('设置新的家长端密码（4位数字）：','');if(v===null)return;if(!/^\d{4}$/.test(v)){toast('请输入4位数字');return;}const r=R();r.parentCred=makeCred(v);saveRoot(r);toast('🔒 家长端密码已更新');}
 function adminAddChild(){if(!reqA())return;const name=prompt('新孩子姓名：');if(!name)return;const pwd=prompt('为'+name+'设置初始登录密码（孩子端用）：','1234');if(!pwd)return;const r=R();const c=freshChild(name.trim());c.cred=makeCred(pwd);r.childData[c.id]=c;r.children.push(c.id);saveRoot(r);renderAdmin();toast('已创建孩子账号：'+name);}
@@ -2715,6 +2793,7 @@ function buildModals(){document.getElementById('modalRoot').innerHTML=
  modal('mFamily','<div class="mttl" id="mFamTtl">发布家庭副本</div><div class="fgrp"><label class="flbl">任务标题</label><input type="text" class="tinp" id="mFamTitle" placeholder="例：全家阅读周"></div><div class="fgrp"><label class="flbl">目标打卡次数</label><input type="number" class="tinp" id="mFamTarget" value="7"></div><div class="fgrp"><label class="flbl">达标奖励星星</label><input type="number" class="tinp" id="mFamReward" value="20"></div><button class="btn bp bblock" onclick="saveFamilyTask()">✓ 发布</button>')+
  modal('mNotif','<div class="mttl">🔔 通知</div><div id="notifBody"></div><button class="btn bo bblock" style="margin-top:10px" onclick="closeM(\'mNotif\')">关闭</button>')+
  modal('mAuth','<div class="mttl" id="authTtl">👨‍👩‍👧 家庭账号登录</div><div class="fgrp"><label class="flbl">家庭邮箱</label><input type="email" class="tinp" id="authEmail" placeholder="family@example.com" autocomplete="username"></div><div class="fgrp"><label class="flbl">密码</label><input type="password" class="tinp" id="authPwd" placeholder="至少6位" autocomplete="current-password"></div><div class="pin-err" id="authErr" style="min-height:18px"></div><button class="btn bp bblock" onclick="doAuthLogin()">登录</button><button class="btn bo bblock" style="margin-top:8px" onclick="doAuthSignup()">首次使用 · 注册家庭账号</button><button class="btn bgray bblock" style="margin-top:8px" onclick="closeM(\'mAuth\')">取消</button><div class="hint">家长端/后台管理端需用家庭邮箱账号登录云端，登录后仍需输入端内 PIN（家长 1234 / 管理 8888）二次校验。</div>')+
+ modal('mFamilyChoice','<div class="mttl">🏠 选择你的家庭</div><div class="hint" style="margin-top:0">第一次使用：可以创建一个全新的家庭，或用别人给你的邀请码加入已有家庭（共享同一份孩子数据）。</div><button class="btn bp bblock" style="margin-top:12px" onclick="createFamily()">➕ 创建新家庭（自动生成邀请码）</button><div style="text-align:center;color:#9CA3AF;font-size:12px;margin:12px 0">— 或 —</div><div class="fgrp"><label class="flbl">输入邀请码加入</label><input type="text" class="tinp" id="fcCode" placeholder="例如：A3F9K2" maxlength="6" style="text-transform:uppercase;letter-spacing:2px;text-align:center;font-size:18px;font-weight:800"></div><button class="btn bo bblock" onclick="joinFamilyByCode()">🔑 加入这个家庭</button><div class="pin-err" id="fcErr" style="min-height:18px"></div>')+
  modal('mRules','<div class="mttl">📖 规则手册</div><div id="rulesBody"></div><button class="btn bo bblock" style="margin-top:10px" onclick="closeM(\'mRules\')">关闭</button>');
  document.querySelectorAll('.mbg').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
 }

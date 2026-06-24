@@ -1,7 +1,7 @@
 {
   "name": "成长冒险岛 · 自律成长",
   "short_name": "成长冒险岛",
-  "description": "孩子自律成长 APP（Supabase 多设备实时同步联网版）：星星增减、运动/阅读兑换屏幕时间、习惯打卡、闯关、宠物、零花钱、家长悬赏。",
+  "description": "孩子自律成长 APP（Supabase 多设备实时同步·多家庭邀请码隔离）：星星增减、运动/阅读兑换屏幕时间、习惯打卡、闯关、宠物、零花钱、家长悬赏。",
   "lang": "zh-CN",
   "dir": "ltr",
   "start_url": "./index.html",
