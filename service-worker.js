@@ -12,7 +12,7 @@
  ============================================================ */
 
 /* 每次发布如改动核心资源，请提升此版本号以触发缓存更新 */
-const CACHE_VERSION = 'gracie-pwa-v8.3.0';
+const CACHE_VERSION = 'gracie-pwa-v8.4.0';
 const CACHE_NAME = CACHE_VERSION;
 
 /* 预缓存的核心资源（相对 SW 所在目录） */

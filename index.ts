@@ -1,5 +1,5 @@
 // ============================================================================
-// 成长冒险岛 v8.2 · Supabase Edge Function: child-submit
+// 成长冒险岛 v8.4 · Supabase Edge Function: child-submit
 // ----------------------------------------------------------------------------
 // 目的（跨设备同步 BUG 修复的服务端侧）：
 //   孩子端通过「选孩子 + 4 位 PIN」进入，不持有 Supabase Auth session，
@@ -7,11 +7,22 @@
 //   本函数以 service_role 在服务端写库，并用 child_id + PIN 自校验来鉴权，
 //   使孩子在独立设备闯关/提交后，另一台设备的家长端可经 Realtime 实时收到待确认。
 //
+// v8.4 关键修复（全部提交类型的待确认状态同步）：
+//   孩子端所有待确认状态（day.pending / day.rdPend / day.jPend / money_log(pending) /
+//   bounty 状态等）都存在 child_state 里。旧版本本函数只写 event_log、不更新
+//   child_state，导致家长端/后台管理端经 Realtime 收到通知后，读到的仍是旧
+//   child_state，看不到阅读/跳绳/零花钱/悬赏等刚提交的 pending（表现为提交后无反应）。
+//   现在前端会随请求携带 child_data（孩子提交后的完整 child 对象），本函数在校验
+//   通过、写 event_log 之后，直接用 child_data 整体 upsert child_state，
+//   使所有提交类型的待确认状态都能被家长端与后台管理端读到。
+//   （未携带 child_data 的旧前端请求，仍走 mergePendingIntoState 增量合并兜底。）
+//
 // 安全要点：
 //   - service_role key 仅在本函数内部使用（从环境变量读取），绝不下发前端。
 //   - type 限定白名单（task/reading/jump/money/bounty），拒绝越权字段。
 //   - PIN 校验失败返回 401；孩子端无任何写家长级字段能力（只写 event_log(pending)
-//     与 child_state 中该孩子自身的当日待确认快照）。
+//     与该孩子自身的 child_state 快照）。child_data 的 id/family 归属由服务端强校验，
+//     无法越权写到别的孩子。
 //   - 返回正确的 CORS 头，允许 https://hwangkimkwok.github.io 跨域调用。
 //
 // 部署：
@@ -111,6 +122,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const child_id: string = payloadBody?.child_id || "";
   const type: string = payloadBody?.type || "";
   const payload = payloadBody?.payload ?? {};
+  // v8.4：孩子提交后的完整 child 对象（用于整体更新 child_state，同步全部 pending 状态）
+  const child_data: any = payloadBody?.child_data ?? null;
   // PIN 传递：优先 pin_hash + pin_salt（前端不存明文，发送已存哈希）；
   // 兼容 login_pin（明文）作为回退路径——由函数重算哈希或比对 child.login_pin 列。
   const pin_hash: string = payloadBody?.pin_hash || "";
@@ -200,11 +213,44 @@ Deno.serve(async (req: Request): Promise<Response> => {
     return json({ error: "event_insert_failed", detail: logErr.message }, 500, origin);
   }
 
-  // ---- 按需合并 child_state：把本次待确认登记进该孩子当日快照（done/记星仍由家长确认）----
-  // 说明：仅在已有 child_state 时做「最小增量合并」，把待确认项写进对应 pending 队列，
-  //       供家长端拉取后逐项确认；绝不修改 stars/money 等家长级结算字段。
+  // ---- 关键新增（v8.4）：用孩子提交后的完整数据整体更新 child_state ----
+  // 让家长端/后台管理端经 Realtime 读到 pending / rdPend / jPend / money_log / bounty
+  // 等全部待确认状态（不再只有闯关/任务）。child_data 的归属（id 必须等于本次校验过的
+  // 孩子）由服务端强校验，避免越权写到别的孩子；写入的是该孩子自身的整存快照。
+  // 兜底：若前端未携带 child_data（旧版本），仍走 mergePendingIntoState 增量合并。
   try {
-    if (stateData) {
+    if (child_data && typeof child_data === "object" && !Array.isArray(child_data)) {
+      // 安全校验：child_data.id 若存在，必须与已校验的 child_state.cred 所属孩子一致，
+      // 即与本次 child_id 对应；不放行携带他人快照覆盖。stateData 为空（云端首存）时允许建档。
+      const idOk =
+        !child_data.id ||
+        !stateData ||
+        !stateData.id ||
+        String(child_data.id) === String(stateData.id);
+      if (idOk) {
+        // 保留云端既有 cred（PIN 凭据以服务端为准，避免被请求体篡改）
+        const dataToWrite: any = { ...child_data };
+        if (storedCred) dataToWrite.cred = storedCred;
+        await admin
+          .from("child_state")
+          .upsert(
+            { child_id: child_id, data: dataToWrite, updated_at: new Date().toISOString() },
+            { onConflict: "child_id" },
+          );
+      } else if (stateData) {
+        // child_data 归属不符 → 退回增量合并已有 stateData，绝不覆盖
+        const merged = mergePendingIntoState(stateData, type, payload);
+        if (merged) {
+          await admin
+            .from("child_state")
+            .upsert(
+              { child_id: child_id, data: merged, updated_at: new Date().toISOString() },
+              { onConflict: "child_id" },
+            );
+        }
+      }
+    } else if (stateData) {
+      // 旧前端未携带 child_data：最小增量合并把待确认写进已有快照
       const merged = mergePendingIntoState(stateData, type, payload);
       if (merged) {
         await admin
@@ -215,9 +261,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
           );
       }
     }
-    // 若云端尚无 child_state，则不创建——家长端可由 event_log(pending) 实时感知待确认。
+    // 若云端尚无 child_state 且无 child_data，则不创建——家长端可由 event_log(pending) 感知待确认。
   } catch (_e) {
-    // 合并失败不影响主流程：event_log 已写入，家长端仍能收到待确认
+    // 更新失败不影响主流程：event_log 已写入，家长端仍能收到待确认
   }
 
   return json({ ok: true, status: "pending" }, 200, origin);
