@@ -1,5 +1,12 @@
 // ============================================================================
-// 成长冒险岛 v8.4 · Supabase Edge Function: child-submit
+// 成长冒险岛 v8.6 · Supabase Edge Function: child-submit
+// ----------------------------------------------------------------------------
+// v8.6 变更：函数逻辑不变（PIN 自校验 + service_role 写 event_log/child_state）。
+//   本版重点是配套的 supabase-rls-policies.sql——收紧 RLS：event_log/child_state 的写入
+//   仅允许 service_role(本函数)，anon 客户端只能读本家庭数据。本函数以 service_role 运行，
+//   不受 RLS 限制，是客户端写这两张表的唯一合法通道，与新 RLS 策略配套形成安全边界。
+// v8.5 变更：type 白名单新增 "tv"（孩子自定义看电视时长申请）；child_data 整体
+//   upsert child_state 逻辑不变，仍以完整 child 对象同步全部待确认状态（含 day.tvPend）。
 // ----------------------------------------------------------------------------
 // 目的（跨设备同步 BUG 修复的服务端侧）：
 //   孩子端通过「选孩子 + 4 位 PIN」进入，不持有 Supabase Auth session，
@@ -19,7 +26,7 @@
 //
 // 安全要点：
 //   - service_role key 仅在本函数内部使用（从环境变量读取），绝不下发前端。
-//   - type 限定白名单（task/reading/jump/money/bounty），拒绝越权字段。
+//   - type 限定白名单（task/reading/jump/money/bounty/tv），拒绝越权字段。
 //   - PIN 校验失败返回 401；孩子端无任何写家长级字段能力（只写 event_log(pending)
 //     与该孩子自身的 child_state 快照）。child_data 的 id/family 归属由服务端强校验，
 //     无法越权写到别的孩子。
@@ -63,6 +70,7 @@ const ALLOWED_TYPES = new Set<string>([
   "jump",     // 跳绳个数
   "money",    // 零花钱申请
   "bounty",   // 悬赏提交
+  "tv",       // v8.5：孩子自定义看电视时长申请
 ]);
 
 // ----------------------------------------------------------------------------
@@ -288,7 +296,7 @@ function mergePendingIntoState(state: any, type: string, payload: any): any | nu
     state.daily = state.daily || {};
     const day = state.daily[k] || (state.daily[k] = {
       done: [], pending: [], rejected: [],
-      rdMins: 0, rdPend: 0, jCnt: 0, jPend: 0,
+      rdMins: 0, rdPend: 0, jCnt: 0, jPend: 0, tvPend: 0, tvGrant: 0,
     });
     day.done = Array.isArray(day.done) ? day.done : [];
     day.pending = Array.isArray(day.pending) ? day.pending : [];
@@ -305,6 +313,10 @@ function mergePendingIntoState(state: any, type: string, payload: any): any | nu
     } else if (type === "jump") {
       const cnt = Number(payload?.count) || 0;
       if (cnt > 0) day.jPend = cnt;
+    } else if (type === "tv") {
+      // v8.5：孩子自定义看电视时长申请（待确认），覆盖为最新值，家长确认后计入 tvGrant
+      const mins = Number(payload?.mins) || 0;
+      if (mins > 0) day.tvPend = mins;
     } else if (type === "money") {
       // 零花钱待确认登记进 money_log（pending），家长确认后入账
       state.money_log = Array.isArray(state.money_log) ? state.money_log : [];
