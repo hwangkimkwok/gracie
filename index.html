@@ -897,6 +897,8 @@ const ISLANDS={
 
 /* 防作弊：专注最短/最长时长（分钟） */
 const FOCUS_MIN=5,FOCUS_MAX=120;
+/* 课后补习：星期名（周日=0 起，与 sgtDow()/Date.getDay() 对齐） */
+const WEEKDAY_NAMES=['周日','周一','周二','周三','周四','周五','周六'];
 
 /* ===================================================================
    闯关系统引擎（v6）
@@ -1428,6 +1430,8 @@ function freshChild(name){return{
  story:{chapter:1,island:'study',progress:0,cleared:{study:0,habit:0,scholar:0,emotion:0}},
  cheers:[],            /* 家长点赞/留言（写入孩子可见） */
  evoCfg:JSON.parse(JSON.stringify(DEF_EVO_CFG)),
+ tutoring:[],          /* 课后补习时间表 [{id,weekday,subject,start,end,place,alarmBefore,alarmOn}] */
+ tutAlarmFired:{},     /* 当日已响过的补习闹钟记录 {dateKey_tutId:true}，防重复响铃 */
  lastWeekReport:null   /* 周报对比缓存基线 */
 };}
 function initRoot(){const c=freshChild('Gracie');return{adminCred:makeCred('8888'),parentCred:makeCred('1234'),children:[c.id],childData:{[c.id]:c},curChild:c.id,seq:1};}
@@ -1503,6 +1507,13 @@ function migrateChild(c){
  if(!c.evoCfg)c.evoCfg=JSON.parse(JSON.stringify(DEF_EVO_CFG));
  ['grow_star','awaken_star','awaken_streak','evolve_star','legend_star'].forEach(k=>{if(c.evoCfg[k]===undefined)c.evoCfg[k]=DEF_EVO_CFG[k];});
  if(c.lastWeekReport===undefined)c.lastWeekReport=null;
+ if(!Array.isArray(c.tutoring))c.tutoring=[];
+ if(!c.tutAlarmFired||typeof c.tutAlarmFired!=='object')c.tutAlarmFired={};
+ c.tutoring.forEach(function(t){
+   if(t.alarmOn===undefined)t.alarmOn=true;
+   if(t.alarmBefore===undefined)t.alarmBefore=15;
+   if(!t.place)t.place='';
+ });
  /* 依据已有真实成长数据校正当前形态(单调不回退)与宠物等级，避免老用户停留在初始形态 */
  try{const nf=computeForm(c);if(FORM_ORDER.indexOf(nf)>FORM_ORDER.indexOf(c.avatar2.form))c.avatar2.form=nf;c.pet2.level=petLevelOf(c);}catch(e){}
  /* v8.5 字段补全：为已存在的每日记录补 tvPend(孩子申请待确认电视分钟)/tvGrant(家长核定当日电视额度)，旧档零损坏 */
@@ -2463,9 +2474,9 @@ function runTimerLoop(){if(TIMER)clearInterval(TIMER);TIMER=setInterval(()=>{con
 /* ===== NAV ===== */
 function navTabs(){if(ROLE==='child'){const c=child(R());
   /* v7.1 补丁#13(P-13)：底部导航优化——专注/形象/心情/家庭/冒险归入「成长」二级页，主导航精简 */
-  const base=[['grow','🌟','成长'],['shop','🛒','商城'],['tv','📺','看电视'],['money','💰','零花钱'],['bounty','🏆','悬赏'],['rules','📖','规则']];
+  const base=[['grow','🌟','成长'],['shop','🛒','商城'],['tv','📺','看电视'],['tutor','📚','补习'],['money','💰','零花钱'],['bounty','🏆','悬赏'],['rules','📖','规则']];
   if(c.cfg.questOn!==false)return[['quest','🗺️','闯关']].concat(base);return[['today','📋','今日']].concat(base);}
- return[['today','📋','确认'],['stars','⭐','星星'],['config','⚙️','配置'],['screen','📱','屏幕'],['money','💰','零花钱'],['bounty','🏆','悬赏'],['family','🏠','家庭'],['report','📈','周报'],['dash','📊','看板']];}
+ return[['today','📋','确认'],['stars','⭐','星星'],['config','⚙️','配置'],['screen','📱','屏幕'],['tutor','📚','补习'],['money','💰','零花钱'],['bounty','🏆','悬赏'],['family','🏠','家庭'],['report','📈','周报'],['dash','📊','看板']];}
 function renderNav(){const r=R(),c=child(r);let h='';
  const pend=ROLE==='parent'?pendCount(c):0;const claims=c.bounties.filter(b=>b.status==='submitted').length;const reds=c.redemptions.filter(x=>x.status==='pending').length;
  const boxes=ROLE==='child'?c.chests.filter(x=>!x.opened).length:0;
@@ -2670,6 +2681,7 @@ function render(){if(ROLE==='admin'){renderAdmin();return;}const r=R(),c=child(r
  else if(CUR_TAB==='config')v=vConfig(c);
  else if(CUR_TAB==='screen')v=vScreen(c);
  else if(CUR_TAB==='dash')v=vDash(c);
+ else if(CUR_TAB==='tutor')v=vTutor(c);
  /* v7.1 补丁#13(P-13)：成长二级页顶部「返回成长」面包屑 */
  if(ROLE==='child'&&subTabs.includes(CUR_TAB)){const subLbl={forest:'🌳 专注森林',avatar:'🧑‍🎨 形象养成',mood:'💗 情绪日记',family:'🏠 家庭副本',story:'🗺️ 冒险地图'}[CUR_TAB]||'';v='<div class="grow-crumb"><button class="grow-back" onclick="swTab(\'grow\')">‹ 返回成长</button><span class="grow-crumb-t">'+subLbl+'</span></div>'+v;}
  /* 家长代理孩子端时顶部提示条 */
@@ -2741,7 +2753,7 @@ function vChildToday(c){const day=dd(c);const fm=day.rl?0:freeMin(c),jm=day.rl?0
  h+='<div class="card"><div class="ctitle">📖 阅读记录</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">阅读30分钟 → 存+10分钟娱乐屏幕 +2★</div><div class="inp-row"><input class="ninp" id="rdInp" type="number" min="30" step="30" value="30"><button class="btn bg" onclick="childReading()">提交阅读</button></div>';
  if(day.rdPend>0)h+='<div class="otwarn" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">⏳ 已提交阅读 '+day.rdPend+' 分钟，等家长确认</div>';
  h+='<div class="hint">今日已确认阅读: '+day.rdMins+'分钟 | 存折: <b style="color:#10B981">'+c.bank+'</b>分钟</div></div>';
- h+='<div class="card"><div class="ctitle">🪢 跳绳换屏幕</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">当场用不累计；填总数等家长确认</div><div class="inp-row"><input class="ninp" id="jmpInp" type="number" min="500" step="500" value="500"><button class="btn bp" onclick="childJump()">提交跳绳</button></div>';
+ h+='<div class="card"><div class="ctitle">🪢 运动跳绳（只调整今日屏幕）</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">当场用不累计，不进存折，次日0点清零；屏幕时间靠阅读存折兑换</div><div class="inp-row"><input class="ninp" id="jmpInp" type="number" min="500" step="500" value="500"><button class="btn bp" onclick="childJump()">提交跳绳</button></div>';
  if(day.jPend>0)h+='<div class="otwarn" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">⏳ 已提交跳绳 '+day.jPend+' 个，等家长确认</div>';
  h+='<table class="rtbl"><tr><td>500个</td><td>=10分钟·+1★</td></tr><tr><td>1000个</td><td>=20分钟·+2★</td></tr><tr><td>1500个</td><td>=30分钟·+3★</td></tr><tr><td>2000个</td><td>=40分钟</td></tr><tr><td>2500个</td><td>=60分钟</td></tr><tr><td>3000个</td><td>=80分钟</td></tr></table></div>';
  return h;}
@@ -3202,7 +3214,54 @@ function vDash(c){const days=last7();let totalDaily=0,doneDaily=0;
  h+='<div class="card"><div class="ctitle">🚨 红线事件</div><div class="irow"><span class="ilbl">累计触犯</span><span class="ival cred">'+redlines+' 次</span></div></div>';
  h+='<div class="card"><button class="btn bo bblock" onclick="exportData()">📤 导出成长数据(CSV)</button></div>';
  return h;}
+/* ===== 补习页（双端） ===== */
+function vTutor(c){
+ let h='';
+ const next=nextTutoring(c);
+ if(ROLE==='child'&&next){const now=nowMinutes();const left=hmToMin(next.start)-now;
+  h+='<div class="tv-card" style="background:linear-gradient(135deg,#B45309,#F59E0B)"><div style="font-size:13px;opacity:.85">⏰ 下一节补习</div><div style="font-size:24px;font-weight:900;margin-top:6px">'+next.subject+' · '+next.start+'</div><div style="font-size:13px;opacity:.9;margin-top:6px">📍 '+(next.place||'地点待定')+'</div><div class="tv-state">'+(left>0?'还有 '+left+' 分钟开始':'正在进行中')+'</div></div>';
+ }
+ if(ROLE==='parent'){
+  h+='<div class="card"><button class="btn bp bblock" onclick="openTutor()">➕ 添加课后补习安排</button><div class="hint" style="margin-top:8px">设置每天的补习科目、时间、地点和提前提醒；保存后同步到孩子端，到点弹窗+声音提醒。</div></div>';
+ }
+ /* 按周一到周日分组展示 */
+ const order=[1,2,3,4,5,6,0];
+ let hasAny=c.tutoring.length>0;
+ if(!hasAny){h+='<div class="card"><div class="empty"><div class="emico">📚</div><div>还没有补习安排</div>'+(ROLE==='child'?'<div style="font-size:12px;margin-top:6px">让家长在补习页添加吧</div>':'')+'</div></div>';return h;}
+ for(const dow of order){
+  const list=c.tutoring.filter(t=>t.weekday===dow).sort((a,b)=>a.start.localeCompare(b.start));
+  if(!list.length)continue;
+  const isToday=dow===sgtDow();
+  h+='<div class="cat-hdr">'+WEEKDAY_NAMES[dow]+(isToday?' · 今天':'')+'</div>';
+  for(const t of list){
+   const al=t.alarmOn?'<span class="sbadge sb-ok">🔔 提前'+t.alarmBefore+'分</span>':'<span class="sbadge sb-done">🔕 无提醒</span>';
+   h+='<div class="bounty"><div class="bounty-h"><span class="bounty-t">'+t.subject+' <span style="font-size:12px;color:#B45309;font-weight:700">'+t.start+'-'+t.end+'</span></span>'+al+'</div><div class="bounty-d">📍 '+(t.place||'地点待定')+'</div>';
+   if(ROLE==='parent')h+='<div class="bounty-foot"><span></span><span><button class="iconbtn" onclick="openTutor(\''+t.id+'\')">✏️</button> <button class="iconbtn" onclick="delTutor(\''+t.id+'\')">🗑️</button></span></div>';
+   h+='</div>';
+  }
+ }
+ return h;}
+
+let TUTEDIT=null;
+function openTutor(id){if(!reqP())return;TUTEDIT=id||null;setText('mTutTtl',id?'编辑补习':'添加补习');
+ if(id){const c=child(R());const t=tutById(c,id);if(t){sv('mTutSubj',t.subject);sv('mTutDay',t.weekday);sv('mTutStart',t.start);sv('mTutEnd',t.end);sv('mTutPlace',t.place);sv('mTutAlarm',t.alarmBefore);document.getElementById('mTutOn').checked=t.alarmOn;}}
+ else{sv('mTutSubj','');sv('mTutDay',sgtDow());sv('mTutStart','16:30');sv('mTutEnd','18:00');sv('mTutPlace','');sv('mTutAlarm','15');document.getElementById('mTutOn').checked=true;}
+ openM('mTutor');}
+function saveTutor(){if(!reqP())return;const subject=gv('mTutSubj').trim();if(!subject){toast('请输入补习科目');return;}
+ const r=R(),c=child(r);const o={subject,weekday:parseInt(gv('mTutDay')),start:gv('mTutStart'),end:gv('mTutEnd'),place:gv('mTutPlace').trim(),alarmBefore:parseInt(gv('mTutAlarm'))||0,alarmOn:document.getElementById('mTutOn').checked};
+ if(o.end<=o.start){toast('结束时间要晚于开始时间');return;}
+ if(TUTEDIT){const t=tutById(c,TUTEDIT);if(t)Object.assign(t,o);}
+ else{o.id='tut_'+uid();c.tutoring.push(o);notify(c,'child','家长添加了补习安排：'+WEEKDAY_NAMES[o.weekday]+' '+subject+' '+o.start);}
+ saveChild(r,c);render();closeM('mTutor');toast('📚 补习安排已保存并同步');}
+function delTutor(id){if(!reqP())return;if(!confirm('删除这条补习安排？'))return;const r=R(),c=child(r);c.tutoring=c.tutoring.filter(t=>t.id!==id);saveChild(r,c);render();toast('已删除');}
 function last7(){const out=[];const base=getSGT();for(let i=6;i>=0;i--){const d=new Date(base);d.setDate(base.getDate()-i);out.push(d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()));}return out;}
+/* ===== 课后补习时间表（WEEKDAY_NAMES 已移至顶部常量区） ===== */
+function tutById(c,id){return c.tutoring.find(t=>t.id===id);}
+function todayTutorings(c){const dow=sgtDow();return c.tutoring.filter(t=>t.weekday===dow).sort((a,b)=>a.start.localeCompare(b.start));}
+function nowMinutes(){const d=getSGT();return d.getHours()*60+d.getMinutes();}
+function hmToMin(hm){const p=(hm||'0:0').split(':');return (parseInt(p[0])||0)*60+(parseInt(p[1])||0);}
+/* 下一节未开始的补习（含正在提醒窗口内） */
+function nextTutoring(c){const list=todayTutorings(c);const now=nowMinutes();for(const t of list){if(hmToMin(t.end)>now)return t;}return null;}
 /* ===== 规则手册 ===== */
 function vRules(c){return rulesHTML();}
 function rulesHTML(){return ''+
@@ -3245,6 +3304,7 @@ function buildModals(){document.getElementById('modalRoot').innerHTML=
  modal('mNotif','<div class="mttl">🔔 通知</div><div id="notifBody"></div><button class="btn bo bblock" style="margin-top:10px" onclick="closeM(\'mNotif\')">关闭</button>')+
  modal('mAuth','<div class="mttl" id="authTtl">👨‍👩‍👧 家庭账号登录</div><div class="fgrp"><label class="flbl">家庭邮箱</label><input type="email" class="tinp" id="authEmail" placeholder="family@example.com" autocomplete="username"></div><div class="fgrp"><label class="flbl">密码</label><input type="password" class="tinp" id="authPwd" placeholder="至少6位" autocomplete="current-password"></div><div class="pin-err" id="authErr" style="min-height:18px"></div><button class="btn bp bblock" onclick="doAuthLogin()">登录</button><button class="btn bo bblock" style="margin-top:8px" onclick="doAuthSignup()">首次使用 · 注册家庭账号</button><button class="btn bgray bblock" style="margin-top:8px" onclick="closeM(\'mAuth\')">取消</button><div class="hint">家长端/后台管理端需用家庭邮箱账号登录云端，登录后仍需输入端内 PIN（家长 1234 / 管理 8888）二次校验。</div>')+
  modal('mFamilyChoice','<div class="mttl">🏠 选择你的家庭</div><div class="hint" style="margin-top:0">第一次使用：可以创建一个全新的家庭，或用别人给你的邀请码加入已有家庭（共享同一份孩子数据）。</div><button class="btn bp bblock" style="margin-top:12px" onclick="createFamily()">➕ 创建新家庭（自动生成邀请码）</button><div style="text-align:center;color:#9CA3AF;font-size:12px;margin:12px 0">— 或 —</div><div class="fgrp"><label class="flbl">输入邀请码加入</label><input type="text" class="tinp" id="fcCode" placeholder="例如：A3F9K2" maxlength="6" style="text-transform:uppercase;letter-spacing:2px;text-align:center;font-size:18px;font-weight:800"></div><button class="btn bo bblock" onclick="joinFamilyByCode()">🔑 加入这个家庭</button><div class="pin-err" id="fcErr" style="min-height:18px"></div>')+
+ modal('mTutor','<div class="mttl" id="mTutTtl">添加补习</div><div class="fgrp"><label class="flbl">科目</label><input type="text" class="tinp" id="mTutSubj" placeholder="例：奥数 / 英语 / 钢琴"></div><div class="fgrp"><label class="flbl">星期</label><select id="mTutDay"><option value="1">周一</option><option value="2">周二</option><option value="3">周三</option><option value="4">周四</option><option value="5">周五</option><option value="6">周六</option><option value="0">周日</option></select></div><div class="fgrp"><label class="flbl">时间</label><div style="display:flex;gap:8px;align-items:center"><input type="time" class="tinp" id="mTutStart" value="16:30" style="margin:0"><span>→</span><input type="time" class="tinp" id="mTutEnd" value="18:00" style="margin:0"></div></div><div class="fgrp"><label class="flbl">补习地点</label><input type="text" class="tinp" id="mTutPlace" placeholder="例：学而思三楼302"></div><div class="fgrp"><label class="flbl">提前提醒（分钟）</label><select id="mTutAlarm"><option value="0">不提醒</option><option value="10">提前10分钟</option><option value="15" selected>提前15分钟</option><option value="30">提前30分钟</option><option value="60">提前1小时</option></select></div><div class="cfg-row"><span class="nm">开启闹钟提醒（弹窗+声音）</span><label style="display:flex;align-items:center"><input type="checkbox" id="mTutOn" checked style="width:20px;height:20px"></label></div><button class="btn bp bblock" onclick="saveTutor()">✓ 保存</button>')+
  modal('mRules','<div class="mttl">📖 规则手册</div><div id="rulesBody"></div><button class="btn bo bblock" style="margin-top:10px" onclick="closeM(\'mRules\')">关闭</button>');
  document.querySelectorAll('.mbg').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
 }
@@ -3262,6 +3322,44 @@ function refreshSwitchBtn(){const sw=document.getElementById('hdrSwitch');if(!sw
 function childLogout(){if(REALROLE!=='child'){logout();return;}if(!confirm('确定退出登录吗？你的星星、存折和记录都会保留。'))return;logout();}
 
 /* ===== INIT ===== */
+/* 补习闹钟检测：到提前提醒点弹窗+声音，防重复 */
+function tutAlarmCheck(){
+ if(!ROLE)return;const c=child(R());if(!c||!c.tutoring||!c.tutoring.length)return;
+ const dow=sgtDow(),now=nowMinutes(),k=tKey();let dirty=false;
+ for(const t of c.tutoring){
+  if(t.weekday!==dow||!t.alarmOn)continue;
+  const fireAt=hmToMin(t.start)-(t.alarmBefore||0);
+  const key=k+'_'+t.id;
+  if(now>=fireAt&&now<hmToMin(t.start)&&!c.tutAlarmFired[key]){
+   c.tutAlarmFired[key]=true;dirty=true;
+   playAlarmSound();
+   TUT_ALARM={subject:t.subject,start:t.start,place:t.place,before:t.alarmBefore};showTutAlarm();
+  }
+ }
+ if(dirty){const r=R();saveChild(r,c);}
+}
+/* 声音提示：Web Audio 生成三声“叮” */
+function playAlarmSound(){
+ try{
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+  const ctx=new AC();let t0=ctx.currentTime;
+  for(let i=0;i<3;i++){const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';o.frequency.value=880;
+   o.connect(g);g.connect(ctx.destination);g.gain.setValueAtTime(0.001,t0);g.gain.exponentialRampToValueAtTime(0.4,t0+0.02);g.gain.exponentialRampToValueAtTime(0.001,t0+0.35);
+   o.start(t0);o.stop(t0+0.36);t0+=0.5;}
+  setTimeout(()=>{try{ctx.close();}catch(e){}},2200);
+ }catch(e){}
+}
+let TUT_ALARM=null;
+function showTutAlarm(){if(!TUT_ALARM)return;let el=document.getElementById('tutAlarm');
+ if(!el){el=document.createElement('div');el.id='tutAlarm';el.className='celebrate';
+  el.innerHTML='<div class="cele-box"><div class="cele-emoji">⏰</div><div class="cele-t" id="taT"></div><div class="cele-s" id="taS"></div><button class="btn bgold bblock" style="margin-top:16px" onclick="hideTutAlarm()">知道啦，准备出发！</button></div>';
+  document.body.appendChild(el);}
+ setText('taT','补习提醒：'+TUT_ALARM.subject);
+ setText('taS','⏰ '+TUT_ALARM.start+' 开始（还有'+TUT_ALARM.before+'分钟）\n📍 '+(TUT_ALARM.place||'地点待定'));
+ el.querySelector('.cele-s').style.whiteSpace='pre-line';
+ el.classList.add('show');TUT_ALARM=null;}
+function hideTutAlarm(){const el=document.getElementById('tutAlarm');if(el)el.classList.remove('show');}
+
 function init(){buildModals();buildHeaderBtns();
  /* v8.0：预热内存缓存（先用本地，云端 cloudInit 异步刷新后会自动重绘） */
  if(!CACHE){const _l=localGetRoot();if(_l)CACHE=_l;}
@@ -3270,6 +3368,7 @@ function init(){buildModals();buildHeaderBtns();
  /* 实时兜底轮询：云端 Realtime 不可用或本地模式时，每 4 秒比对一次本地快照，发现变化即重绘
     （配合 BroadcastChannel，确保"另一端 5 秒内刷新"在各种环境都成立） */
  startRealtimePollFallback();
+ setInterval(tutAlarmCheck,20000); /* 每20秒检测补习闹钟 */
  /* v7.1 补丁#7(P-07)：专注计时切后台/回来二次校验——到点结算、未到点续跑 */
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
