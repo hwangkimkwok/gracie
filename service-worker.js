@@ -1,21 +1,15 @@
+'use strict';
+
 /* ============================================================
- 成长冒险岛 · 自律成长 APP — Service Worker
- 作用：缓存核心静态资源，实现断网 / 添加到主屏幕后仍可正常打开使用。
- 缓存策略：
-   - 安装(install)：预缓存核心资源（index.html、manifest、图标）。
-   - 激活(activate)：清理旧版本缓存（缓存名带版本号，更新版本即自动失效旧缓存）。
-   - 拦截(fetch)：
-       · 导航请求(HTML 页面) 用「网络优先、失败回退缓存」——保证有网时拿到最新版，没网时用缓存。
-       · 其它静态资源用「缓存优先、回退网络并回填」——加快二次加载、离线可用。
- 注意：本应用数据保存在 localStorage（键 gracie_v3），不经过 Service Worker，
-       因此清理本 SW 缓存不会影响用户数据，但卸载/清理网站数据仍会清空 localStorage。
+ 成长冒险岛 · 自律成长 APP v8.9.0 — Service Worker
+ GitHub Pages / PWA 离线缓存
  ============================================================ */
 
-/* 每次发布如改动核心资源，请提升此版本号以触发缓存更新 */
-const CACHE_VERSION = 'gracie-pwa-v8.8.0';
-const CACHE_NAME = CACHE_VERSION;
+const CACHE_PREFIX = 'gracie-pwa-';
+const CACHE_VERSION = 'v8.9.0-20260814';
+const STATIC_CACHE = `${CACHE_PREFIX}${CACHE_VERSION}-static`;
+const RUNTIME_CACHE = `${CACHE_PREFIX}${CACHE_VERSION}-runtime`;
 
-/* 预缓存的核心资源（相对 SW 所在目录） */
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -27,67 +21,134 @@ const CORE_ASSETS = [
 /* 安装：预缓存核心资源 */
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
+    caches
+      .open(STATIC_CACHE)
       .then((cache) => cache.addAll(CORE_ASSETS))
-      .then(() => self.skipWaiting()) /* 立即激活新 SW */
+      .then(() => self.skipWaiting())
   );
 });
 
-/* 激活：删除非当前版本的旧缓存 */
+/* 激活：仅清理本应用的旧缓存，不影响同域其他应用 */
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys
+            .filter(
+              (key) =>
+                key.startsWith(CACHE_PREFIX) &&
+                key !== STATIC_CACHE &&
+                key !== RUNTIME_CACHE
+            )
+            .map((key) => caches.delete(key))
+        )
       )
-    ).then(() => self.clients.claim()) /* 立即接管已打开页面 */
+      .then(() => self.clients.claim())
   );
 });
 
-/* 拦截请求 */
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
+/* 导航请求：网络优先，离线回退 index.html */
+async function handleNavigation(request) {
+  try {
+    const response = await fetch(request, {
+      cache: 'no-store'
+    });
 
-  /* 仅处理 GET 请求；其它（POST 等）直接走网络 */
-  if (req.method !== 'GET') return;
+    if (response && response.ok) {
+      const cache = await caches.open(RUNTIME_CACHE);
+      await cache.put(request, response.clone());
+    }
 
-  /* 跨域请求不缓存，直接走网络 */
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
-
-  /* HTML 导航：网络优先，失败回退缓存（保证更新及时 + 离线可用） */
-  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
-    event.respondWith(
-      fetch(req)
-        .then((resp) => {
-          const copy = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-          return resp;
-        })
-        .catch(() =>
-          caches.match(req).then((cached) => cached || caches.match('./index.html'))
-        )
+    return response;
+  } catch (error) {
+    return (
+      (await caches.match(request)) ||
+      (await caches.match('./index.html')) ||
+      (await caches.match('./')) ||
+      new Response('应用当前处于离线状态，且尚未完成离线缓存。', {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8'
+        }
+      })
     );
+  }
+}
+
+/* 静态资源：缓存优先，未命中时请求网络并回填 */
+async function handleStaticAsset(request) {
+  const cached = await caches.match(request);
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response = await fetch(request);
+
+    if (
+      response &&
+      response.ok &&
+      response.type === 'basic'
+    ) {
+      const cache = await caches.open(RUNTIME_CACHE);
+      await cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    return new Response('', {
+      status: 504,
+      statusText: 'Gateway Timeout'
+    });
+  }
+}
+
+/* 请求拦截 */
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+
+  /* 仅处理 GET */
+  if (request.method !== 'GET') {
     return;
   }
 
-  /* 其它静态资源：缓存优先，回退网络并回填缓存 */
-  event.respondWith(
-    caches.match(req).then((cached) => {
-      if (cached) return cached;
-      return fetch(req).then((resp) => {
-        /* 只缓存正常的同源响应 */
-        if (resp && resp.status === 200 && resp.type === 'basic') {
-          const copy = resp.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
-        }
-        return resp;
-      }).catch(() => cached);
-    })
-  );
+  const url = new URL(request.url);
+
+  /* Supabase、CDN 等跨域请求直接交给浏览器 */
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  const acceptsHTML = (
+    request.headers.get('accept') || ''
+  ).includes('text/html');
+
+  if (request.mode === 'navigate' || acceptsHTML) {
+    event.respondWith(handleNavigation(request));
+    return;
+  }
+
+  event.respondWith(handleStaticAsset(request));
 });
 
-/* 支持页面主动触发跳过等待（可选） */
+/*
+ * 与 index.html 的更新逻辑兼容：
+ * index.html 发送：
+ * worker.postMessage({ type: 'SKIP_WAITING' })
+ *
+ * 同时兼容旧版字符串消息。
+ */
 self.addEventListener('message', (event) => {
-  if (event.data === 'SKIP_WAITING') self.skipWaiting();
+  const data = event.data;
+
+  if (
+    data === 'SKIP_WAITING' ||
+    (data && data.type === 'SKIP_WAITING')
+  ) {
+    self.skipWaiting();
+  }
 });

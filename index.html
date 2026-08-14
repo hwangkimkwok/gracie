@@ -3,11 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>成长冒险岛 · 自律成长 v8.8 联网版</title>
+<title>成长冒险岛 · 自律成长 v8.9.0 联网版</title>
 <!-- ===== v7.6 PWA 改造：iPhone Safari「添加到主屏幕」全屏安装 ===== -->
 <meta name="description" content="成长冒险岛 · 孩子自律成长 APP（Supabase 多设备实时同步联网版）">
 <!-- PWA manifest -->
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="./manifest.json">
 <!-- 主题色（与 manifest theme_color 一致） -->
 <meta name="theme-color" content="#6D28D9">
 <!-- iOS 全屏 standalone（添加到主屏幕后隐藏 Safari 地址栏/工具栏） -->
@@ -16,11 +16,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="成长冒险岛">
 <!-- iOS 主屏图标（与 manifest 引用一致） -->
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="./icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="./icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;font-family:-apple-system,'PingFang SC','Segoe UI',sans-serif;background:#F3EEFF;color:#1a1a2e;overflow:hidden}
@@ -550,8 +550,8 @@ window.SUPABASE_CONFIG = {
 <input type="file" id="restoreFileInput" accept="application/json,.json" style="display:none" onchange="handleRestoreFile(event)">
 <script>
 /* ===================================================================
- 成长冒险岛 · 自律成长 APP v8.8 联网版（原 Gracie 自律成长 APP）
- v8.8 升级要点（v8.7 复核后进一步整改；仅加固，不改业务规则）：
+ 成长冒险岛 · 自律成长 APP v8.9.0 联网版（原 Gracie 自律成长 APP）
+ v8.9.0 升级要点（v8.7 复核后进一步整改；仅加固，不改业务规则）：
    [OUTBOX] persistOutbox/pushOutbox 全链路确认「优先保留 event(孩子真实提交)、优先丢 state(全量快照)」；
      trimOutboxToLimit 改为返回 {droppedState,droppedEvent} 统计；新增 warnIfEventDropped：仅当极端裁剪
      真的牺牲了 event 时弹更醒目 alert 告警(提示需联网/重新提交)，避免「看似提交成功实则永久丢失」。
@@ -564,7 +564,7 @@ window.SUPABASE_CONFIG = {
    [DOC] 升级说明重申：数据安全性完全取决于 Supabase 后台 RLS 是否按 family_id 隔离并把 event_log/
      child_state 写入锁到 service_role；给出「另一家庭账号实测无法读到本家庭数据」的验证步骤；
      anon key + djb2(PIN) 硬编码为纯前端不可消除的已知约束，本轮不改，仅说明定位与风险。
-   存储键沿用 gracie_v3，v8.7→v8.8 旧数据零损耗迁移；星星/兑换/闯关/看电视/多家庭同步等既有功能零回退。
+   存储键沿用 gracie_v3，v8.7→v8.9.0 旧数据零损耗迁移；星星/兑换/闯关/看电视/多家庭同步等既有功能零回退。
  ---- 以下为 v8.7 历史升级要点（保留）----
  成长冒险岛 · 自律成长 APP v8.7 联网版（原 Gracie 自律成长 APP）
  v8.7 升级要点（安全加固 + v8.6 遗留问题修复；仅加固，不改业务规则）：
@@ -897,8 +897,6 @@ const ISLANDS={
 
 /* 防作弊：专注最短/最长时长（分钟） */
 const FOCUS_MIN=5,FOCUS_MAX=120;
-/* 课后补习：星期名（周日=0 起，与 sgtDow()/Date.getDay() 对齐） */
-const WEEKDAY_NAMES=['周日','周一','周二','周三','周四','周五','周六'];
 
 /* ===================================================================
    闯关系统引擎（v6）
@@ -984,7 +982,7 @@ function authSecured(){return !!(CLOUD&&CLOUD.session&&CLOUD.session.user);}
 function isCloudSecured(){return (typeof cloudConfigured==='function'&&cloudConfigured())&&authSecured();}
 function reqP(){if(!isParentAuth()){toast&&toast('需要家长权限');return false;}return true;}
 function reqA(){if(!isAdminAuth()){toast&&toast('需要后台管理权限');return false;}return true;}
-/* reqCloudP（v8.6 引入，v8.7/v8.8 定位澄清）——【前端便捷校验，不是安全层，对攻击者无约束】。
+/* reqCloudP（v8.6 引入，v8.7/v8.9.0 定位澄清）——【前端便捷校验，不是安全层，对攻击者无约束】。
    ⚠️ 明确定位：本函数只是「前端体验层」的便捷拦截（提前挡住明显未登录的高危误操作、给出友好提示）。
        它【不是安全边界、不是新增的安全层】，对任何绕过前端的攻击者（改 JS 变量、直连 REST API、
        用 anon key 手工发请求）都【毫无约束力】——他们根本不会走到这个函数。
@@ -1122,6 +1120,21 @@ function cloudSubscribeRealtime(){
       .subscribe();
   }catch(e){console.warn('Realtime 订阅失败：',e);}
 }
+function cloudRemoveRealtime(){
+  try{if(CLOUD.realtimeCh&&CLOUD.sb){CLOUD.sb.removeChannel(CLOUD.realtimeCh);}}catch(e){console.warn('移除 Realtime 失败：',e);}
+  CLOUD.realtimeCh=null;
+}
+function clearCloudRuntimeState(){
+  cloudRemoveRealtime();
+  CLOUD.familyId=null;CLOUD.childIdMap={};CLOUD.outbox=[];CLOUD._needFamily=false;
+  CLOUD.inviteCode=null;CLOUD.familyName=null;CLOUD.memberRole=null;
+  if(CLOUD._lastPushTs)CLOUD._lastPushTs={};
+  try{localStorage.removeItem(OUTBOX_KEY);}catch(e){console.warn('清理 OUTBOX 失败：',e);}
+}
+async function cloudSignOutQuiet(){
+  try{if(CLOUD.sb&&CLOUD.session){await CLOUD.sb.auth.signOut();}}catch(e){console.warn('Supabase signOut 失败：',e);}
+  CLOUD.session=null;
+}
 /* 对端更新了某孩子 state → 合并进 CACHE → 节流重绘
    v8.3 防跳动闪烁：
    1) 忽略本端刚写入的回推——比对回推 updated_at 与本端最近一次推送时间，
@@ -1179,7 +1192,14 @@ function onLocalBroadcast(ev){
 
 /* ---- localStorage 底层读写（CACHE 的持久化兜底） ---- */
 function localGetRoot(){try{const r=localStorage.getItem(ROOT_LOCAL);if(r)return JSON.parse(r);}catch(e){}return null;}
-function localSaveRoot(r){try{localStorage.setItem(ROOT_LOCAL,JSON.stringify(r));}catch(e){}}
+function localSaveRoot(r){
+  try{localStorage.setItem(ROOT_LOCAL,JSON.stringify(r));return true;}
+  catch(e){
+    console.error('localSaveRoot 写入失败：',e);
+    try{ if(typeof toast==='function')toast('❌ 本机保存失败：'+(e&&e.message?e.message:'存储空间不足或浏览器限制')); }catch(_e){}
+    return false;
+  }
+}
 
 /* ---- 把某个孩子整体写入云端 child_state（带 updated_at 乐观信息） ----
    v8.3：upsert 前记录本端推送时间戳 CLOUD._lastPushTs[cobj.id]，
@@ -1189,23 +1209,39 @@ async function cloudPushChild(cobj){
   try{
     let cloudId=cobj._cloudId||CLOUD.childIdMap[cobj.id];
     if(!cloudId){ /* 云端尚无此孩子 → 建 child 行 */
-      const {data:nc}=await CLOUD.sb.from('child').insert({family_id:CLOUD.familyId,name:cobj.name,login_pin:(cobj.cred&&cobj.cred.pin)||'1234'}).select().single();
-      if(nc){cloudId=nc.id;CLOUD.childIdMap[cobj.id]=cloudId;cobj._cloudId=cloudId;}
+      const {data:nc,error:insertError}=await CLOUD.sb.from('child')
+        .insert({family_id:CLOUD.familyId,name:cobj.name,login_pin:(cobj.cred&&cobj.cred.pin)||'1234'})
+        .select().single();
+      if(insertError||!nc){
+        console.error('cloudPushChild child insert 失败，转入 OUTBOX：',insertError||'no data');
+        pushOutbox('state',cobj.id,cobj);
+        return false;
+      }
+      cloudId=nc.id;CLOUD.childIdMap[cobj.id]=cloudId;cobj._cloudId=cloudId;
     }
-    if(cloudId){
-      /* 记录本端推送时间戳（v8.6：仅作辅助日志/诊断；回声去重已改由内容哈希判定）；并按容量清理防无限增长 */
-      if(!CLOUD._lastPushTs)CLOUD._lastPushTs={};
-      CLOUD._lastPushTs[cobj.id]=Date.now();
-      pruneLastPushTs();
-      await CLOUD.sb.from('child_state').upsert({child_id:cloudId,data:cobj,updated_at:new Date().toISOString()},{onConflict:'child_id'});
+    if(!cloudId){
+      console.error('cloudPushChild 缺少 cloudId，转入 OUTBOX');
+      pushOutbox('state',cobj.id,cobj);
+      return false;
+    }
+    /* 记录本端推送时间戳（v8.6：仅作辅助日志/诊断；回声去重已改由内容哈希判定）；并按容量清理防无限增长 */
+    if(!CLOUD._lastPushTs)CLOUD._lastPushTs={};
+    CLOUD._lastPushTs[cobj.id]=Date.now();
+    pruneLastPushTs();
+    const {error:upsertError}=await CLOUD.sb.from('child_state')
+      .upsert({child_id:cloudId,data:cobj,updated_at:new Date().toISOString()},{onConflict:'child_id'});
+    if(upsertError){
+      console.error('cloudPushChild child_state upsert 失败，转入 OUTBOX：',upsertError);
+      pushOutbox('state',cobj.id,cobj);
+      return false;
     }
     return true;
-  }catch(e){console.warn('cloudPushChild 失败，转入 outbox：',e);pushOutbox('state',cobj.id,cobj);return false;}
+  }catch(e){console.error('cloudPushChild 失败，转入 outbox：',e);pushOutbox('state',cobj.id,cobj);return false;}
 }
 /* ===== v8.6 OUTBOX 健壮性：去重(按 child_id 合并同类 state) + 队列上限 + 写满配额降级 ===== */
 const OUTBOX_MAX=200;              /* 队列长度上限，超出丢弃最旧记录 */
 const PUSHTS_MAX=100;             /* CLOUD._lastPushTs 键数上限，超出按最旧 LRU 清理 */
-/* v8.7/v8.8：按上限裁剪 outbox——优先保留 event 类（孩子打卡/阅读/跳绳/零花钱/悬赏/看电视申请等
+/* v8.7/v8.9.0：按上限裁剪 outbox——优先保留 event 类（孩子打卡/阅读/跳绳/零花钱/悬赏/看电视申请等
    真实提交，丢了=真数据丢失、不可恢复），优先丢弃 state 类（全量快照，联网后 cloudPushChild
    可 push 一次覆盖恢复，丢了无损）。
    返回一个统计对象 {trimmed, droppedState, droppedEvent}，供调用方决定提示等级：
@@ -1224,7 +1260,7 @@ function trimOutboxToLimit(limit){
   while(CLOUD.outbox.length>limit){CLOUD.outbox.shift();res.trimmed=true;res.droppedEvent++;}
   return res;
 }
-/* v8.8：当裁剪确实牺牲了 event（孩子真实提交）时，给出更醒目告警，避免「看似提交成功实则永久丢失」 */
+/* v8.9.0：当裁剪确实牺牲了 event（孩子真实提交）时，给出更醒目告警，避免「看似提交成功实则永久丢失」 */
 function warnIfEventDropped(res,ctx){
   if(res&&res.droppedEvent>0){
     console.error('[OUTBOX] 极端裁剪丢弃了 '+res.droppedEvent+' 条孩子提交(event)，'+(ctx||''));
@@ -1274,7 +1310,7 @@ function pushOutbox(kind,childLocalId,data){
   /* 去重：同一 child_id 的 state 记录只保留最新一条（整存快照，旧的无意义），避免队列被同孩子刷爆 */
   if(kind==='state'){CLOUD.outbox=CLOUD.outbox.filter(it=>!(it.kind==='state'&&it.childLocalId===childLocalId));}
   CLOUD.outbox.push({kind,childLocalId,data,ts:Date.now()});
-  /* v8.7/v8.8：队列上限——优先丢 state、保 event（孩子提交丢了不可恢复）；
+  /* v8.7/v8.9.0：队列上限——优先丢 state、保 event（孩子提交丢了不可恢复）；
      若极端到牺牲 event，warnIfEventDropped 给出醒目 alert 告警 */
   if(CLOUD.outbox.length>OUTBOX_MAX){
     const res=trimOutboxToLimit(OUTBOX_MAX);
@@ -1381,6 +1417,7 @@ function saveRoot(r){ CACHE=r; localSaveRoot(r);
 function freshChild(name){return{
  id:'c_'+Math.random().toString(36).slice(2,8),name:name||'Gracie',avatar:'👧',cred:makeCred('1234'),
  stars:0,frozen:0,money:0,bank:0,lifetimeStars:0,lifetimeRead:0,lifetimeJump:0,
+ readExchangeBalance:0,screenRequests:[],screenLedger:[],
  txs:[],money_log:[],bounties:[],daily:{},
  tasks:JSON.parse(JSON.stringify(DEF_TASKS)),draftTasks:null,
  shop:JSON.parse(JSON.stringify(DEF_SHOP)),redemptions:[],
@@ -1389,6 +1426,7 @@ function freshChild(name){return{
  notifs:[],changelog:[],
  cfg:{levels:JSON.parse(JSON.stringify(DEF_LEVELS)),milestones:JSON.parse(JSON.stringify(DEF_MILESTONES)),
    breakDays:1,petOn:true,lockOnEnd:false,
+   freeDisplayFriday:60,freeDisplaySaturday:15,freeDisplaySunday:15,
    /* ===== 闯关系统配置（家长可配，草稿-发布同步） ===== */
    questOn:true,                 /* 闯关地图开关 */
    levelOrder:[],               /* 关卡顺序：task_id 数组(空=按任务库默认顺序) */
@@ -1507,6 +1545,12 @@ function migrateChild(c){
  if(!c.evoCfg)c.evoCfg=JSON.parse(JSON.stringify(DEF_EVO_CFG));
  ['grow_star','awaken_star','awaken_streak','evolve_star','legend_star'].forEach(k=>{if(c.evoCfg[k]===undefined)c.evoCfg[k]=DEF_EVO_CFG[k];});
  if(c.lastWeekReport===undefined)c.lastWeekReport=null;
+ if(c.readExchangeBalance===undefined)c.readExchangeBalance=0;
+ if(!Array.isArray(c.screenRequests))c.screenRequests=[];
+ if(!Array.isArray(c.screenLedger))c.screenLedger=[];
+ if(c.cfg.freeDisplayFriday===undefined)c.cfg.freeDisplayFriday=60;
+ if(c.cfg.freeDisplaySaturday===undefined)c.cfg.freeDisplaySaturday=15;
+ if(c.cfg.freeDisplaySunday===undefined)c.cfg.freeDisplaySunday=15;
  if(!Array.isArray(c.tutoring))c.tutoring=[];
  if(!c.tutAlarmFired||typeof c.tutAlarmFired!=='object')c.tutAlarmFired={};
  c.tutoring.forEach(function(t){
@@ -1517,7 +1561,7 @@ function migrateChild(c){
  /* 依据已有真实成长数据校正当前形态(单调不回退)与宠物等级，避免老用户停留在初始形态 */
  try{const nf=computeForm(c);if(FORM_ORDER.indexOf(nf)>FORM_ORDER.indexOf(c.avatar2.form))c.avatar2.form=nf;c.pet2.level=petLevelOf(c);}catch(e){}
  /* v8.5 字段补全：为已存在的每日记录补 tvPend(孩子申请待确认电视分钟)/tvGrant(家长核定当日电视额度)，旧档零损坏 */
- if(c.daily&&typeof c.daily==='object'){for(const dk in c.daily){const dv=c.daily[dk];if(dv&&typeof dv==='object'){if(dv.tvPend===undefined)dv.tvPend=0;if(dv.tvGrant===undefined)dv.tvGrant=0;}}}
+ if(c.daily&&typeof c.daily==='object'){for(const dk in c.daily){const dv=c.daily[dk];if(dv&&typeof dv==='object'){if(dv.tvPend===undefined)dv.tvPend=0;if(dv.tvGrant===undefined)dv.tvGrant=0;if(dv.jUsed===undefined)dv.jUsed=0;}}}
  return c;
 }
 function R(){let r=root();if(!r){r=initRoot();saveRoot(r);}let dirty=false;
@@ -1534,10 +1578,10 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 
 /* ---------- 当日数据 + 每日重置（PRD Sheet10） ---------- */
 function dd(c,k){k=k||tKey();
- if(!c.daily[k])c.daily[k]={done:[],pending:[],rejected:[],rdMins:0,rdPend:0,bankAdded:0,bankUsed:0,jCnt:0,jMin:0,jPend:0,scrUsed:0,rl:false,stEarned:0,selfStop:0,remind:0,read:0,focusMin:0,focusCnt:0,mood:'',freezeUsed:false,storyAdvanced:false,tvPend:0,tvGrant:0};
+ if(!c.daily[k])c.daily[k]={done:[],pending:[],rejected:[],rdMins:0,rdPend:0,bankAdded:0,bankUsed:0,jCnt:0,jMin:0,jUsed:0,jPend:0,scrUsed:0,rl:false,stEarned:0,selfStop:0,remind:0,read:0,focusMin:0,focusCnt:0,mood:'',freezeUsed:false,storyAdvanced:false,tvPend:0,tvGrant:0};
  const x=c.daily[k];
  ['done','pending','rejected'].forEach(f=>{if(!Array.isArray(x[f]))x[f]=[];});
- ['rdMins','rdPend','bankAdded','bankUsed','jCnt','jMin','jPend','scrUsed','stEarned','selfStop','remind','read','focusMin','focusCnt'].forEach(f=>{if(x[f]===undefined)x[f]=0;});
+ ['rdMins','rdPend','bankAdded','bankUsed','jCnt','jMin','jUsed','jPend','scrUsed','stEarned','selfStop','remind','read','focusMin','focusCnt'].forEach(f=>{if(x[f]===undefined)x[f]=0;});
  if(x.rl===undefined)x.rl=false;if(x.mood===undefined)x.mood='';if(x.freezeUsed===undefined)x.freezeUsed=false;if(x.storyAdvanced===undefined)x.storyAdvanced=false;/* v7.1 补丁#11(P-11) */return x;
 }
 /* 是否处于假期：手动总开关 OR 今天落在假期时间段内 OR 旧版单日 mode='holiday' */
@@ -1545,8 +1589,11 @@ function isHoliday(c){if(!c)return false;const h=c.holiday||{};if(h.enabled)retu
 /* 免费时长：普通 平日0/周末15/周五60；假期 平日freeWeekday/周末freeWeekend */
 function freeMin(c){const d=sgtDow();if(isHoliday(c)){const h=c.holiday;return(d===0||d===6)?h.freeWeekend:h.freeWeekday;}if(d===5)return 60;if(d===0||d===6)return 15;return 0;}
 function dayLabel(c){const d=sgtDow();const n=['周日','周一','周二','周三','周四','周五','周六'][d];const f=freeMin(c);let tag=f>=60?'🎉':'';let m='';if(isHoliday(c))m='🏖️假期';else m={normal:'',leave:'🤒请假',travel:'✈️旅行'}[c.mode]||'';return n+(m?' '+m:(' 免费'+f+'分'))+(tag?' '+tag:'');}
-/* v8.5：可用娱乐时长 = 免费额度 + 跳绳换得 + 阅读存折 + 家长核定的当日电视额度(tvGrant) */
-function availMin(c){const day=dd(c);if(day.rl)return 0;return freeMin(c)+day.jMin+c.bank+(day.tvGrant||0);}
+/* v8.9：免费提示仅展示；实际可用=今日运动剩余+跨天屏幕存折 */
+function displayFreeMin(c){const d=sgtDow(),cfg=c.cfg||{};if(d===5)return Math.max(0,Number(cfg.freeDisplayFriday)||0);if(d===6)return Math.max(0,Number(cfg.freeDisplaySaturday)||0);if(d===0)return Math.max(0,Number(cfg.freeDisplaySunday)||0);return 0;}
+function freeDisplayText(c){const m=displayFreeMin(c);return m>0?'今日免费提示：'+m+'分钟（仅展示，不计入今日可用时间）':'';}
+function sportRemain(c){const day=dd(c);return Math.max(0,(day.jMin||0)-(day.jUsed||0));}
+function availMin(c){const day=dd(c);if(day.rl)return 0;return sportRemain(c)+Math.max(0,c.bank||0);}
 /* 假期每日必做习惯门槛（普通=全部daily任务数；假期=holiday.coreNeed） */
 function coreNeed(c){if(isHoliday(c))return Math.max(1,c.holiday.coreNeed);return activeTasks(c).filter(t=>t.freq==='daily').length;}
 function levelOf(c){const L=c.cfg.levels;let cur=L[0];for(const l of L)if(c.stars>=l.min)cur=l;return cur;}
@@ -1657,7 +1704,7 @@ function confirmCheckin(id,ok){if(!reqP())return;
 /* 开宝箱：随机奖励入账（星星/特权/心愿券/勋章） */
 function openChest(id){const r=R(),c=child(r);const ch=c.chests.find(x=>x.id===id);if(!ch||ch.opened)return;ch.opened=true;const rw=ch.reward;
  if(rw.type==='star'){addStar(c,Number(rw.value)||0,'milestone','开宝箱奖励');}
- else if(rw.type==='privilege'){const day=dd(c);c.bank+=15;day.bankAdded+=15;notify(c,'child','宝箱特权：娱乐时间+15分钟');}
+ else if(rw.type==='privilege'){addStar(c,5,'milestone','宝箱特权已转换为星星');rw.label='⭐ 5颗星星';notify(c,'child','宝箱特权已转换为5颗星星');}
  else if(rw.type==='wishcard'){c.wishCards=(c.wishCards||0)+1;notify(c,'child','获得心愿加速券x1');}
  else if(rw.type==='medal'){c.medals['m_chest']={unlocked:true,at:nowISO()};}
  else if(rw.type==='collect'){const got=grantCollectible(c);if(got)rw.label='🗃️ 图鉴：'+got.name+'（'+RARITY_LABEL[got.rarity]+'）';}
@@ -1734,16 +1781,15 @@ function focusGiveUp(){const r=R(),c=child(r);if(!c.focus.running)return;
  const dur=c.focus.durMin;c.forest.trees.unshift({date:tKey(),duration:dur,alive:false,ts:nowISO()});
  c.focus.running=false;if(FOCUS_TIMER){clearInterval(FOCUS_TIMER);FOCUS_TIMER=null;}
  saveChild(r,c);render();toast('🥀 小树枯萎了，下次坚持到底就能收获森林～');}
-/* 完成：树长成，专注时长换星星(每5分钟+1★)+时间币(1分钟专注=1分钟存折) */
+/* 完成：树长成；v8.9.0 起专注只奖励星星，不再直接增加屏幕存折 */
 function focusComplete(c,actualMin){const dur=actualMin||c.focus.durMin;const day=dd(c);
  c.forest.trees.unshift({date:tKey(),duration:dur,alive:true,ts:nowISO()});
  c.forest.totalFocusMin+=dur;c.forest.sessions+=1;day.focusMin+=dur;day.focusCnt+=1;
- const star=Math.floor(dur/5);const screen=dur;/* 双货币接入：星星 + 阅读存折时间币 */
+ const star=Math.floor(dur/5);
  if(star>0)addStar(c,star,'task','专注森林 '+dur+'分钟');
- c.bank+=screen;day.bankAdded+=screen;
  c.focus.running=false;if(FOCUS_TIMER){clearInterval(FOCUS_TIMER);FOCUS_TIMER=null;}
- notify(c,'parent','专注森林完成：'+dur+'分钟 (+'+star+'★ +'+screen+'分钟存折)');
- CELE={emoji:'🌳',t:'小树长成了！',s:'专注 '+dur+' 分钟，+'+star+'★ 与 '+screen+' 分钟存折已到账'};}
+ notify(c,'parent','专注森林完成：'+dur+'分钟 (+'+star+'★)');
+ CELE={emoji:'🌳',t:'小树长成了！',s:'专注 '+dur+' 分钟，+'+star+'★ 已到账'};}
 function focusFinishNow(){const r=R(),c=child(r);if(!c.focus.running)return;const el=Math.floor((Date.now()-c.focus.startTs)/1000/60);
  if(el<c.focus.durMin){/* 未到时间手动点完成视为提前结束=枯萎 */focusGiveUp();return;}
  focusComplete(c,c.focus.durMin);saveChild(r,c);render();}
@@ -1786,7 +1832,7 @@ function petReturn(){const r=R(),c=child(r);if(!c.pet2.traveling){toast('宠物�
  }
  const g=PET_GIFTS[Math.floor(Math.random()*PET_GIFTS.length)];let label=g.label;
  if(g.type==='star'){addStar(c,g.value,'milestone','宠物旅行礼物');}
- else if(g.type==='screen'){const day=dd(c);c.bank+=g.value;day.bankAdded+=g.value;}
+ else if(g.type==='screen'){addStar(c,Math.max(1,Math.round(g.value/3)),'milestone','宠物旅行屏幕奖励已转换为星星');label='⭐ 旅行带回 '+Math.max(1,Math.round(g.value/3))+' 颗星星';}
  else if(g.type==='item'){c.items.streakFreeze=(c.items.streakFreeze||0)+1;}
  else if(g.type==='collect'){const it=grantCollectible(c);if(it)label='🎁 旅行带回：'+it.name;}
  c.pet2.traveling=false;c.pet2.lastTravelMs=0;/* v7.3 补丁T-2：归来后清零出发时间戳 */c.pet2.level=petLevelOf(c);c.pet2.mood=petMood(c);
@@ -1925,10 +1971,8 @@ function childReading(){
  if(ROLE==='parent'){doReadingGrant(c,m);saveChild(r,c);render();toast('📖 阅读'+m+'分钟已记入');}
  else{day.rdPend+=m;notify(c,'parent','阅读待确认：'+m+'分钟');if(ROLE==='child')childSubmitEvent('reading',{mins:m});saveChild(r,c);render();toast('已提交阅读'+m+'分钟，等家长确认');}
 }
-function doReadingGrant(c,m){const sess=Math.floor(m/30);const day=dd(c);day.rdMins+=m;day.read+=m;c.lifetimeRead+=m;
- /* 假期阅读兑换更划算[假设]：每30分钟存+15分钟(普通+10)；星星不变 */
- const perSess=isHoliday(c)?15:10;const add=sess*perSess;day.bankAdded+=add;c.bank+=add;
- const star=sess*2;if(star>0)addStar(c,star,'task','阅读'+m+'分钟'+(isHoliday(c)?'（假期1.5倍存折）':''));}
+function doReadingGrant(c,m){const sess=Math.floor(m/30);const day=dd(c);day.rdMins+=m;day.read+=m;c.lifetimeRead+=m;c.readExchangeBalance=(c.readExchangeBalance||0)+m;
+ const star=sess*2;if(star>0)addStar(c,star,'task','阅读'+m+'分钟');}
 function confirmReading(ok){if(!reqP())return;const r=R(),c=child(r);const day=dd(c);const m=day.rdPend;if(m<=0)return;day.rdPend=0;if(ok){doReadingGrant(c,m);notify(c,'child','阅读已确认：'+m+'分钟');saveChild(r,c);render();toast('已确认阅读'+m+'分钟');}else{notify(c,'child','阅读记录被退回');saveChild(r,c);render();toast('已退回阅读');}}
 
 /* ===== 跳绳 ===== */
@@ -1942,25 +1986,13 @@ function childJump(){
 function doJumpGrant(c,cnt){const{min,st}=calcJump(cnt);const day=dd(c);const prev=day.jSt||0;day.jCnt=cnt;day.jMin=min;day.jSt=st;c.lifetimeJump+=cnt;const diff=Math.max(0,st-prev);if(diff>0)addStar(c,diff,'task','跳绳'+cnt+'个');}
 function confirmJump(ok){if(!reqP())return;const r=R(),c=child(r);const day=dd(c);const cnt=day.jPend;if(cnt<=0)return;day.jPend=0;if(ok){doJumpGrant(c,cnt);notify(c,'child','跳绳已确认：'+cnt+'个');saveChild(r,c);render();toast('已确认跳绳'+cnt+'个');}else{notify(c,'child','跳绳记录被退回');saveChild(r,c);render();toast('已退回跳绳');}}
 
-/* ===== 屏幕时间使用 ===== */
-function addScr(mins){
- const r=R(),c=child(r);const day=dd(c);
- const fm=day.rl?0:freeMin(c),jm=day.rl?0:day.jMin;
- const prev=day.scrUsed;day.scrUsed+=mins;
- const pb=Math.max(0,prev-fm-jm),nb=Math.max(0,day.scrUsed-fm-jm),delta=nb-pb;
- if(delta>0){
-  if(delta>c.bank){
-   const ot=delta-c.bank;day.bankUsed+=c.bank;c.bank=0;
-   /* 假期超时更宽松[假设]：仅扣完存折、不强制次日暂停；普通：清零并次日娱乐暂停 */
-   if(isHoliday(c)){saveChild(r,c);render();toast('🏖️ 假期超时'+ot+'分钟，存折已用完（不额外惩罚）');return;}
-   else{day.overPause=true;saveChild(r,c);render();toast('⚠️ 超时'+ot+'分钟！存折清零，次日娱乐暂停');return;}
-  }else{c.bank-=delta;day.bankUsed+=delta;}
- }
- saveChild(r,c);render();toast('📱 已记录'+mins+'分钟娱乐屏幕');
-}
+/* ===== v8.9 屏幕时间：今日运动优先，跨天屏幕存折补足 ===== */
+function addScreenLedger(c,type,change,remark,extra){const x=extra||{};c.screenLedger.unshift({id:uid(),ts:nowISO(),type,change:change||0,sportUsed:x.sportUsed||0,bankUsed:x.bankUsed||0,readingMinutes:x.readingMinutes||0,remark:remark||'',balanceAfter:Math.max(0,c.bank||0)});if(c.screenLedger.length>500)c.screenLedger.length=500;}
+function consumeScreenTime(c,mins){const day=dd(c);let left=Math.max(0,Math.round(Number(mins)||0));const requested=left;const sportAvailable=sportRemain(c);const sportUsed=Math.min(left,sportAvailable);day.jUsed=(day.jUsed||0)+sportUsed;left-=sportUsed;const bankUsed=Math.min(left,Math.max(0,c.bank||0));c.bank=Math.max(0,(c.bank||0)-bankUsed);day.bankUsed=(day.bankUsed||0)+bankUsed;left-=bankUsed;return{requested,sportUsed,bankUsed,insufficient:left};}
+function addScr(mins){const r=R(),c=child(r);mins=Math.max(0,Math.round(Number(mins)||0));if(mins<=0)return;if(mins>availMin(c)){toast('可用屏幕时间不足，无法记录');return;}const day=dd(c),used=consumeScreenTime(c,mins);day.scrUsed=(day.scrUsed||0)+mins;addScreenLedger(c,'screen_use',-used.bankUsed,'使用屏幕（运动'+used.sportUsed+'，存折'+used.bankUsed+'）',used);saveChild(r,c);render();toast('📱 已记录'+mins+'分钟（先用运动时间）');}
 function qScr(m){addScr(m);}
 function doScrInput(){const m=parseInt(gv('scrInp'))||0;if(m>0)addScr(m);}
-function resetScr(){if(!reqP())return;if(!confirm('确定重置今日屏幕使用记录？'))return;const r=R(),c=child(r);const day=dd(c);c.bank+=day.bankUsed;day.bankUsed=0;day.scrUsed=0;saveChild(r,c);render();toast('✅ 已重置今日屏幕');}
+function resetScr(){if(!reqP())return;if(!confirm('确定重置今日屏幕使用记录？使用来源将一并恢复。'))return;const r=R(),c=child(r),day=dd(c);const restored=day.bankUsed||0;c.bank=Math.max(0,(c.bank||0)+restored);day.jUsed=0;day.bankUsed=0;day.scrUsed=0;addScreenLedger(c,'correction',restored,'重置今日屏幕记录并恢复使用来源');saveChild(r,c);render();toast('✅ 已重置并恢复今日运动与存折使用');}
 function logSelfStop(stopped){const r=R(),c=child(r);const day=dd(c);if(stopped){day.selfStop++;addStar(c,2,'task','到点自己停（屏幕）');}else{day.remind++;}saveChild(r,c);render();toast(stopped?'到点自己停 +2★':'记录被提醒一次');}
 
 /* ===== 红线 ===== */
@@ -2135,7 +2167,7 @@ async function resetAll(){if(!reqCloudP())return;/* v8.6：高危清零，云端
  /* v7.6：清空前强制提示先导出备份 + 二次确认 */
  if(!confirm('⚠️ 即将清空所有数据并恢复出厂，操作不可恢复！\n\n强烈建议先「导出备份(JSON)」保存到文件，再清空。\n\n是否已经导出备份、确认继续？')){toast('已取消。请先到「备份与恢复」导出 JSON 备份');return;}
  if(!confirm('再次确认：真的要全部清空吗？\n清空后星星、存折、零花钱、闯关、宠物等全部记录将被永久删除，无法找回。'))return;
- /* ===== v8.6 清零竞态优化 + v8.7/v8.8 边界修复 =====
+ /* ===== v8.6 清零竞态优化 + v8.7/v8.9.0 边界修复 =====
     v8.4 修复了「清零无效」（云端 reload 后被 cloudPullAll 灌回）。但离线场景仍有竞态：
     若已登录云端但本地清零后无法即时覆盖云端 child_state，恢复网络时其他在线设备的旧数据
     可能先推回、把清零覆盖掉。
@@ -2143,7 +2175,7 @@ async function resetAll(){if(!reqCloudP())return;/* v8.6：高危清零，云端
       · 未配置云端(纯本地) → 直接清本地；
       · 已 Auth 登录但尚未建/加入家庭(_needFamily) → 云端本就无本家庭数据，只清本地(不误写云端)；
       · 其余不可写云端的情形 → 拒绝并给出针对性提示，避免误清/误判。
-    ---- v8.8 关键修复 ----
+    ---- v8.9.0 关键修复 ----
     旧版把「session 在但 familyId 暂缺」分支放在 if(cloudEngaged()) 内，而 cloudEngaged() 本身
     要求 familyId 为真——该分支恒不可达（死代码），真实的「网络抖动丢 familyId」反而落到
     else 分支被当作可清本地处理。现改为以「是否已配置云端 + 是否持有 Auth 会话」为总闸，
@@ -2202,12 +2234,16 @@ async function resetAll(){if(!reqCloudP())return;/* v8.6：高危清零，云端
          fresh._cloudId=old._cloudId||CLOUD.childIdMap[old.id]||null;
          fresh._resetAt=resetStamp; /* 清零版本戳，写入云端 child_state.data，便于识别为已清零快照 */
          /* 直接 await upsert 到云端（要求在线），确认写入后再清本地，降低被旧数据覆盖概率 */
-         await cloudPushChild(fresh);
+         const pushed=await cloudPushChild(fresh);
+         if(!pushed)throw new Error('云端清零写入失败：'+(old.name||old.id||id));
        }
      }
    }
- }catch(e){console.warn('云端清零失败：',e);
-   if(!confirm('云端清零可能未完全成功（网络异常）。\n仍要继续清空本地并刷新吗？\n（建议稍后联网再次执行清空以确保云端一致）')){toast&&toast('已取消');return;}
+ }catch(e){
+   console.error('云端清零失败，已中止本地清空：',e);
+   alert('⚠️ 云端清零未成功，本次操作已中止。\n\n为避免云端旧数据在刷新后覆盖本机，本地数据不会被删除。请检查网络后重试。');
+   toast&&toast('云端清零失败，已中止清空');
+   return;
  }
  /* 清本地 + 离线待补传 OUTBOX + 会话，并清空内存态，避免残留旧数据再被推回 */
  try{localStorage.removeItem(ROOT);localStorage.removeItem(ROOT+'_session');localStorage.removeItem(OUTBOX_KEY);}catch(e){console.warn('清本地键失败：',e);}
@@ -2221,11 +2257,11 @@ function backupExportJSON(){if(!reqP())return;
  if(!raw){toast('暂无数据可备份');return;}
  /* 包一层元信息，便于校验与人读，但 data 即原始 gracie_v3 */
  let dataObj;try{dataObj=JSON.parse(raw);}catch(e){toast('本地数据异常，无法备份');return;}
- const pkg={app:'成长冒险岛',type:'gracie-backup',storeKey:ROOT,version:'v8.8',exportedAt:new Date().toISOString(),data:dataObj};
+ const pkg={app:'成长冒险岛',type:'gracie-backup',storeKey:ROOT,version:'v8.9.0',exportedAt:new Date().toISOString(),data:dataObj};
  const json=JSON.stringify(pkg,null,2);
  const blob=new Blob([json],{type:'application/json;charset=utf-8'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
- a.download='成长冒险岛备份_v8.8_'+tKey()+'.json';
+ a.download='成长冒险岛备份_v8.9.0_'+tKey()+'.json';
  document.body.appendChild(a);a.click();a.remove();
  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
  toast('✅ 备份已导出（请妥善保存该 JSON 文件）');}
@@ -2236,13 +2272,14 @@ function backupImportJSON(){if(!reqP())return;
  if(!inp){toast('恢复入口缺失');return;}
  inp.value='';inp.click();}
 
-function handleRestoreFile(ev){if(!reqP())return;
+async function handleRestoreFile(ev){if(!reqP())return;
  const file=ev.target.files&&ev.target.files[0];
  if(!file){return;}
- const reader=new FileReader();
- reader.onload=function(){
+ const readFileAsText=(f)=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error||new Error('读取文件失败'));reader.readAsText(f,'utf-8');});
+ try{
+   const text=await readFileAsText(file);
    let parsed;
-   try{parsed=JSON.parse(reader.result);}catch(e){toast('❌ 文件不是合法 JSON，恢复已取消');ev.target.value='';return;}
+   try{parsed=JSON.parse(text);}catch(e){toast('❌ 文件不是合法 JSON，恢复已取消');ev.target.value='';return;}
    /* 兼容两种格式：① v7.6 备份包 {data:{...}} ② 直接的 gracie_v3 根对象 */
    let dataObj=null;
    if(parsed&&typeof parsed==='object'&&parsed.data&&typeof parsed.data==='object'&&parsed.data.childData){dataObj=parsed.data;}
@@ -2259,15 +2296,22 @@ function handleRestoreFile(ev){if(!reqP())return;
    if(!confirm('即将用所选备份覆盖当前全部数据：\n\n孩子（'+ids.length+'）：'+names+when+'\n\n⚠️ 当前设备上的现有数据将被完全替换且无法撤销。\n建议先「导出备份」保存当前数据。\n\n确认恢复并覆盖吗？')){toast('已取消恢复');ev.target.value='';return;}
    if(!confirm('再次确认：用备份文件覆盖当前数据？')){toast('已取消恢复');ev.target.value='';return;}
    try{
-     localStorage.setItem(ROOT,JSON.stringify(dataObj));
+     const ok=localSaveRoot(dataObj);
+     if(!ok)throw new Error('本机保存失败');
      localStorage.removeItem(ROOT+'_session'); /* 清会话，回登录页重新进入，确保读取新数据 */
+     localStorage.removeItem(OUTBOX_KEY);
    }catch(e){toast('❌ 写入失败：'+(e&&e.message?e.message:'存储异常'));ev.target.value='';return;}
    ev.target.value='';
-   alert('✅ 恢复成功！将重新加载应用以载入备份数据。');
+   /* 恢复到本机成功后主动断开云端运行态，防止刷新后 Realtime/Supabase 旧数据覆盖本地备份 */
+   cloudRemoveRealtime();
+   await cloudSignOutQuiet();
+   clearCloudRuntimeState();
+   CLOUD.session=null;
+   CACHE=dataObj;CLOUD.outbox=[];if(CLOUD._lastPushTs)CLOUD._lastPushTs={};
+   alert('✅ 恢复成功！已退出云端会话并清理同步队列，将重新加载应用以载入本机备份数据。');
    location.reload();
- };
- reader.onerror=function(){toast('❌ 读取文件失败，恢复已取消');ev.target.value='';};
- reader.readAsText(file,'utf-8');}
+ }catch(e){console.error('恢复读取失败：',e);toast('❌ 读取文件失败，恢复已取消');ev.target.value='';}
+}
 
 /* ===== 数据导出（CSV，呼应纸质成长表） ===== */
 function exportData(){const c=child(R());let rows=[['类型','日期/时间','内容','数值','余额']];
@@ -2279,14 +2323,14 @@ function exportData(){const c=child(R());let rows=[['类型','日期/时间','�
    rows.push(['零花钱',m.ts.slice(0,16).replace('T',' '),m.source,(m.amount>0?'+':'')+fmtMoney(m.amount),_bal]);
  }});
  const csv='\ufeff'+rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');
- const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='成长冒险岛数据_v8.8_'+c.name+'_'+tKey()+'.csv';a.click();toast('已导出CSV');}
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='成长冒险岛数据_v8.9.0_'+c.name+'_'+tKey()+'.csv';a.click();toast('已导出CSV');}
 
 /* ===== 通知已读 ===== */
 function markNotifsRead(){const r=R(),c=child(r);c.notifs.forEach(n=>{if(n.to===ROLE)n.read=true;});saveChild(r,c);render();}
 
 /* ===== 登录/角色 ===== */
 function renderLogin(){const r=R();
- let h='<div class="login"><div class="login-logo"><div class="big">🏝️</div><div class="t">成长冒险岛</div><div class="s">家长主控 · 孩子执行</div><div class="s" style="margin-top:2px;opacity:.7">v8.8 联网版 · 多家庭</div><div class="s" id="cloudBadge" style="margin-top:2px;font-size:11px;opacity:.8"></div></div>';
+ let h='<div class="login"><div class="login-logo"><div class="big">🏝️</div><div class="t">成长冒险岛</div><div class="s">家长主控 · 孩子执行</div><div class="s" style="margin-top:2px;opacity:.7">v8.9.0 联网版 · 多家庭</div><div class="s" id="cloudBadge" style="margin-top:2px;font-size:11px;opacity:.8"></div></div>';
  h+='<div id="roleSelect">'+
   '<button class="role-card" onclick="goChildPick()"><span class="role-ico">👧</span><span class="role-info"><span class="role-t">孩子端</span><span class="role-d">打卡 · 商城 · 等级 · 看电视计时</span></span><span class="role-arrow">›</span></button>'+
   '<button class="role-card" onclick="goPin(\'parent\')"><span class="role-ico">👨‍👩‍👧</span><span class="role-info"><span class="role-t">家长端</span><span class="role-d">确认 · 配置规则 · 商城 · 看板 · 管账号</span></span><span class="role-arrow">›</span></button>'+
@@ -2440,30 +2484,34 @@ async function migrateLocalToCloud(){
 function impersonateChild(){if(!isParentAuth()){toast('需要家长权限');return;}if(TIMER){clearInterval(TIMER);TIMER=null;}IMP=true;ROLE='child';CUR_TAB='today';render();const c=child(R());if(c.tv.running)runTimerLoop();toast('👀 已进入孩子端（家长代理）');}
 /* 从孩子端代理视图返回家长端。仅真实家长可用，无需再次输密码 */
 function backToParent(){if(!isParentAuth()){toast('需要家长权限');return;}if(TIMER){clearInterval(TIMER);TIMER=null;}IMP=false;if(REALROLE==='admin'){ROLE='admin';CUR_TAB='overview';render();toast('↩️ 已返回后台管理');}else{ROLE='parent';CUR_TAB='today';render();toast('↩️ 已返回家长端');}}
-function logout(){if(TIMER){clearInterval(TIMER);TIMER=null;}ROLE=null;REALROLE=null;IMP=false;localStorage.removeItem(ROOT+'_session');document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').style.display='block';renderLogin();}
+async function logout(){
+ if(TIMER){clearInterval(TIMER);TIMER=null;}
+ if(FOCUS_TIMER){clearInterval(FOCUS_TIMER);FOCUS_TIMER=null;}
+ cloudRemoveRealtime();
+ await cloudSignOutQuiet();
+ clearCloudRuntimeState();
+ ROLE=null;REALROLE=null;IMP=false;CID=null;
+ localStorage.removeItem(ROOT+'_session');
+ updateCloudBadge&&updateCloudBadge();
+ document.getElementById('mainApp').style.display='none';
+ document.getElementById('loginScreen').style.display='block';
+ renderLogin();
+}
 function enterApp(){const r=R();CID=r.curChild;document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='flex';CUR_TAB=(REALROLE==='admin')?'overview':'today';render();const c=child(r);if(c.tv.running)runTimerLoop();if(c.focus&&c.focus.running)runFocusLoop();}
-/* ===== v8.5 孩子端自定义看电视时长申请 + 家长确认 ===== */
-/* 孩子填写想看的分钟数 → 记 day.tvPend（待确认），经 Edge Function 同步到云端，家长端可见 */
-function tvRequest(){const r=R(),c=child(r);const day=dd(c);
- const v=gv('tvReqMin');const mins=parseInt(v,10);
- if(isNaN(mins)||mins<=0){toast('请输入想看的分钟数（正整数）');return;}
- if(mins>600){toast('单次申请请不超过600分钟');return;}
- day.tvPend=mins;/* 覆盖为最新申请值，避免重复叠加 */
- notify(c,'parent','看电视申请待确认：'+mins+'分钟');
- if(ROLE==='child')childSubmitEvent('tv',{mins:mins});
- saveChild(r,c);render();toast('已提交看电视申请'+mins+'分钟，等家长确认');}
-/* 家长确认孩子的看电视申请：确认→按孩子自定义时长计入当日电视额度 tvGrant；退回→清空申请 */
-function confirmTvReq(ok){if(!reqP())return;const r=R(),c=child(r);const day=dd(c);const mins=day.tvPend||0;if(mins<=0)return;
- day.tvPend=0;
- if(ok){day.tvGrant=(day.tvGrant||0)+mins;notify(c,'child','看电视申请已确认：+'+mins+'分钟');saveChild(r,c);render();toast('已确认看电视'+mins+'分钟');}
- else{notify(c,'child','看电视申请被退回');saveChild(r,c);render();toast('已退回看电视申请');}}
-/* ===== v8.5 家长端自由加减「今日电视额度」（tvGrant，正负均可，下限0），即时生效同步孩子端 ===== */
-function adjTvGrant(delta){if(!reqP())return;const r=R(),c=child(r);const day=dd(c);
- const cur=day.tvGrant||0;const next=Math.max(0,cur+delta);day.tvGrant=next;
- saveChild(r,c);render();toast('今日电视额度：'+next+' 分钟');}
-function adjTvGrantInput(){if(!reqP())return;const v=gv('tvGrantInp');const delta=parseInt(v,10);if(isNaN(delta)||delta===0){toast('请输入非零整数（正数=增加，负数=扣减）');return;}adjTvGrant(delta);}
+/* ===== v8.9 阅读兑换与屏幕存折申请 ===== */
+function submitReadingExchange(){const r=R(),c=child(r),mins=parseInt(gv('readExMin'),10)||0;if(mins<=0||mins%30!==0){toast('阅读分钟必须是30的正整数倍');return;}if(mins>(c.readExchangeBalance||0)){toast('可兑换阅读余额不足');return;}const per=isHoliday(c)?15:10,screen=mins/30*per;const req={id:'sr_'+uid(),type:'reading_exchange',readingMinutes:mins,screenMinutes:screen,change:screen,reason:'阅读时间兑换',status:'pending',createdAt:nowISO(),handledAt:null,handledBy:null};c.screenRequests.unshift(req);notify(c,'parent','阅读兑换申请：阅读'+mins+'分钟 → 屏幕'+screen+'分钟');if(ROLE==='child')childSubmitEvent('screen_request',{requestType:req.type,requestId:req.id,readingMinutes:mins,screenMinutes:screen});saveChild(r,c);render();toast('已提交阅读兑换申请');}
+function submitBankAdjust(){const r=R(),c=child(r),dir=gv('bankReqDir')==='minus'?-1:1,mins=parseInt(gv('bankReqMin'),10)||0,reason=gv('bankReqReason').trim();if(mins<=0){toast('请输入正整数分钟');return;}if(!reason){toast('请输入申请原因');return;}const change=dir*mins;const req={id:'sr_'+uid(),type:'bank_adjust',readingMinutes:0,screenMinutes:0,change,reason,status:'pending',createdAt:nowISO(),handledAt:null,handledBy:null};c.screenRequests.unshift(req);notify(c,'parent','屏幕存折调整申请：'+(change>0?'+':'')+change+'分钟');if(ROLE==='child')childSubmitEvent('screen_request',{requestType:req.type,requestId:req.id,change,reason});saveChild(r,c);render();toast('已提交存折调整申请');}
+function reviewScreenRequest(id,ok){if(!reqP())return;const r=R(),c=child(r),q=c.screenRequests.find(x=>x.id===id);if(!q||q.status!=='pending')return;if(ok&&q.type==='reading_exchange'){if((c.readExchangeBalance||0)<q.readingMinutes){toast('当前可兑换阅读余额不足，可能已被其他申请使用');return;}c.readExchangeBalance-=q.readingMinutes;c.bank=Math.max(0,(c.bank||0)+q.screenMinutes);addScreenLedger(c,'reading_exchange',q.screenMinutes,'阅读'+q.readingMinutes+'分钟兑换屏幕'+q.screenMinutes+'分钟',{readingMinutes:q.readingMinutes});}
+ else if(ok&&q.type==='bank_adjust'){if(q.change<0&&(c.bank||0)<-q.change){toast('当前屏幕存折余额不足');return;}const before=Math.max(0,c.bank||0);c.bank=Math.max(0,before+q.change);const actual=c.bank-before;addScreenLedger(c,'child_adjust',actual,'孩子申请：'+q.reason);}
+ q.status=ok?'approved':'rejected';q.handledAt=nowISO();q.handledBy='parent';notify(c,'child',(q.type==='reading_exchange'?'阅读兑换':'屏幕存折调整')+'申请'+(ok?'已通过':'已驳回'));saveChild(r,c);render();toast(ok?'申请已通过':'申请已驳回');}
+function parentAdjustBank(){if(!reqP())return;const r=R(),c=child(r),change=parseInt(gv('bankAdjMin'),10),reason=gv('bankAdjReason').trim();if(!Number.isInteger(change)||change===0){toast('请输入非零整数分钟');return;}if(!reason){toast('请输入调整原因');return;}const before=Math.max(0,c.bank||0);c.bank=Math.max(0,before+change);const actual=c.bank-before;addScreenLedger(c,'parent_adjust',actual,reason);saveChild(r,c);render();toast('屏幕存折已调整 '+(actual>0?'+':'')+actual+' 分钟');}
+function saveFreeDisplayCfg(){if(!reqP())return;const r=R(),c=child(r);c.cfg.freeDisplayFriday=Math.max(0,parseInt(gv('freeFri'),10)||0);c.cfg.freeDisplaySaturday=Math.max(0,parseInt(gv('freeSat'),10)||0);c.cfg.freeDisplaySunday=Math.max(0,parseInt(gv('freeSun'),10)||0);saveChild(r,c);render();toast('免费提示已保存并同步');}
+function screenReqLabel(q){return q.type==='reading_exchange'?'阅读兑换':'存折调整';}
+function screenReqStatus(q){return q.status==='pending'?'待审批':q.status==='approved'?'已通过':q.status==='rejected'?'已驳回':'已取消';}
+function screenRequestList(c,parent){const a=(c.screenRequests||[]).filter(q=>parent?q.status==='pending':true).slice(0,parent?50:20);if(!a.length)return '<div class="hint">暂无'+(parent?'待审批':'申请')+'记录</div>';return a.map(q=>'<div class="pend-card"><div class="pend-h"><span class="pend-t">'+screenReqLabel(q)+'</span><span class="sbadge '+(q.status==='pending'?'sb-pend':q.status==='approved'?'sb-ok':'sb-rej')+'">'+screenReqStatus(q)+'</span></div><div class="pend-d">'+(q.type==='reading_exchange'?'阅读 '+q.readingMinutes+' 分钟 → 屏幕 +'+q.screenMinutes+' 分钟':(q.change>0?'+':'')+q.change+' 分钟 · '+q.reason)+'</div>'+(parent?'<div class="pend-btns"><button class="btn bg bsm" style="flex:1" onclick="reviewScreenRequest(\''+q.id+'\',true)">通过</button><button class="btn bgray bsm" style="flex:1" onclick="reviewScreenRequest(\''+q.id+'\',false)">驳回</button></div>':'<div class="hint">申请 '+q.createdAt.slice(0,16).replace('T',' ')+(q.handledAt?' · 审批 '+q.handledAt.slice(0,16).replace('T',' '):'')+'</div>')+'</div>').join('');}
+function screenLedgerList(c){const names={reading_exchange:'阅读兑换',parent_adjust:'家长调整',child_adjust:'孩子申请',screen_use:'屏幕使用',correction:'修正',legacy_migration:'旧数据迁移'};const a=(c.screenLedger||[]).slice(0,30);if(!a.length)return '<div class="hint">暂无屏幕存折流水</div>';return a.map(x=>'<div class="tx"><div class="txamt '+(x.change>=0?'pos':'neg')+'">'+(x.change>0?'+':'')+x.change+'分</div><div class="txinf"><div class="txdesc">'+x.remark+'</div><div class="txmeta">'+(names[x.type]||x.type)+' · '+x.ts.slice(0,16).replace('T',' ')+'</div></div><div class="txtot">余'+x.balanceAfter+'</div></div>').join('');}
 /* ===== TV 倒计时 ===== */
-function tvAvailSec(c){const day=dd(c);return Math.max(0,(availMin(c)-day.scrUsed)*60);}
+function tvAvailSec(c){return Math.max(0,availMin(c)*60);}
 function fmtClock(sec){sec=Math.max(0,Math.round(sec));const m=Math.floor(sec/60),x=sec%60;return p2(m)+':'+p2(x);}
 function tvStart(){const r=R(),c=child(r);const av=tvAvailSec(c);if(av<=0){toast('今天没有可用的娱乐屏幕时间');return;}c.tv.running=true;c.tv.startTs=Date.now();c.tv.allowSec=av;saveChild(r,c);runTimerLoop();toast('▶️ 开始计时');}
 function tvStop(manual){const r=R(),c=child(r);if(!c.tv.running)return;const el=Math.floor((Date.now()-c.tv.startTs)/1000);const used=Math.min(el,c.tv.allowSec);const usedMin=Math.max(1,Math.round(used/60));c.tv.running=false;c.tv.startTs=0;saveChild(r,c);if(TIMER){clearInterval(TIMER);TIMER=null;}addScr(usedMin);
@@ -2484,7 +2532,7 @@ function renderNav(){const r=R(),c=child(r);let h='';
  const growSub=['forest','avatar','mood','family','story'];
  for(const[id,ic,lb]of navTabs()){let dot='';if(ROLE==='parent'&&id==='today'&&pend>0)dot='<span class="dot">'+pend+'</span>';if(ROLE==='parent'&&id==='bounty'&&claims>0)dot='<span class="dot">'+claims+'</span>';if(ROLE==='parent'&&id==='stars'&&reds>0)dot='<span class="dot">'+reds+'</span>';if(ROLE==='child'&&id==='grow'&&boxes>0)dot='<span class="dot">'+boxes+'</span>';const act=(CUR_TAB===id||(id==='grow'&&ROLE==='child'&&growSub.includes(CUR_TAB)))?' active':'';h+='<button class="nb'+act+'" onclick="swTab(\''+id+'\')"><span class="ni">'+ic+'</span><span class="nl">'+lb+'</span>'+dot+'</button>';}
  setHTML('navBar',h);}
-function pendCount(c){const day=dd(c);let n=day.pending.length+(day.rdPend>0?1:0)+(day.jPend>0?1:0)+((day.tvPend||0)>0?1:0);n+=c.money_log.filter(m=>m.status==='pending').length;return n;}
+function pendCount(c){const day=dd(c);let n=day.pending.length+(day.rdPend>0?1:0)+(day.jPend>0?1:0);n+=c.money_log.filter(m=>m.status==='pending').length;n+=(c.screenRequests||[]).filter(q=>q.status==='pending').length;return n;}
 function swTab(t){CUR_TAB=t;document.getElementById('scrollArea').scrollTop=0;render();}
 
 /* ====================================================================
@@ -2579,7 +2627,7 @@ function adminChildren(r){
   h+='<div class="card"><div class="ctitle">'+c.avatar+' '+c.name+' <span style="font-weight:600;color:#6B7280">'+lv.emoji+' '+lv.name+'</span></div>';
   h+='<div class="irow"><span class="ilbl">当前星星 / 累计 / 冻结</span><span class="ival cgold">'+c.stars+' / '+c.lifetimeStars+' / '+c.frozen+'</span></div>';
   h+='<div class="irow"><span class="ilbl">零花钱余额</span><span class="ival cgrn">'+fmtMoney(c.money)+' 元</span></div>';
-  h+='<div class="irow"><span class="ilbl">阅读存折 / 连续打卡</span><span class="ival cpur">'+c.bank+'分 / '+c.streak.current+'天(最高'+c.streak.max+')</span></div>';
+  h+='<div class="irow"><span class="ilbl">屏幕存折 / 连续打卡</span><span class="ival cpur">'+c.bank+'分 / '+c.streak.current+'天(最高'+c.streak.max+')</span></div>';
   h+='<div class="irow"><span class="ilbl">任务数 / 商城 / 心愿 / 悬赏</span><span class="ival">'+c.tasks.length+' / '+c.shop.length+' / '+c.wishes.length+' / '+c.bounties.length+'</span></div>';
   h+='<div class="qbtns" style="margin-top:10px">'+
     '<button class="btn bg bsm" onclick="adminQuickStar(\''+id+'\',1)">+1★</button>'+
@@ -2644,7 +2692,7 @@ function adminExportAllCSV(){if(!reqA())return;const r=R();let rows=[['孩子','
   c.money_log.slice().reverse().forEach(m=>{if(m.status==='confirmed'){const _isBk=/_spend$/.test(m.bucket||'');const _bal=_isBk?('罐余'+fmtMoney(m.bucketBalAfter||0)):fmtMoney(m.balance_after||0);rows.push([c.name,'零花钱',m.ts.slice(0,16).replace('T',' '),m.source,(m.amount>0?'+':'')+fmtMoney(m.amount),_bal]);}});
  }
  const csv='\ufeff'+rows.map(row=>row.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n');
- const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='成长冒险岛全员数据_v8.8_'+tKey()+'.csv';document.body.appendChild(a);a.click();a.remove();toast('已导出全员CSV');}
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='成长冒险岛全员数据_v8.9.0_'+tKey()+'.csv';document.body.appendChild(a);a.click();a.remove();toast('已导出全员CSV');}
 
 /* ===== v8.3 render 节流：合并 250ms 内的多次重绘请求，消除连续回推导致的整页来回跳动/闪烁 ===== */
 let _RENDER_T=null;
@@ -2730,7 +2778,7 @@ function vQuest(c){
  });
  h+='</div></div>';
  /* 阅读/跳绳入口（保持原能力，直接内嵌于闯关首页） */
- h+='<div class="card"><div class="ctitle">📖 阅读记录</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">阅读30分钟 → 存折+'+(isHoliday(c)?15:10)+'分钟 +2★</div><div class="inp-row"><input class="ninp" id="rdInp" type="number" min="30" step="30" value="30"><button class="btn bg" onclick="childReading()">提交阅读</button></div>'+(day.rdPend>0?'<div class="otwarn" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">⏳ 已提交阅读 '+day.rdPend+' 分钟，等家长确认</div>':'')+'<div class="hint">今日已确认阅读 '+day.rdMins+' 分钟 · 存折余额 <b style="color:#10B981">'+c.bank+'</b> 分钟</div></div>';
+ h+='<div class="card"><div class="ctitle">📖 阅读记录</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">阅读30分钟 → 确认后获得可兑换阅读余额 +2★</div><div class="inp-row"><input class="ninp" id="rdInp" type="number" min="30" step="30" value="30"><button class="btn bg" onclick="childReading()">提交阅读</button></div>'+(day.rdPend>0?'<div class="otwarn" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">⏳ 已提交阅读 '+day.rdPend+' 分钟，等家长确认</div>':'')+'<div class="hint">今日已确认阅读 '+day.rdMins+' 分钟 · 可兑换阅读 <b style="color:#10B981">'+c.readExchangeBalance+'</b> 分钟</div></div>';
  h+='<div class="card"><div class="ctitle">🪢 跳绳换屏幕</div><div class="inp-row"><input class="ninp" id="jmpInp" type="number" min="500" step="500" value="500"><button class="btn bp" onclick="childJump()">提交跳绳</button></div>'+(day.jPend>0?'<div class="otwarn" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">⏳ 已提交跳绳 '+day.jPend+' 个，等家长确认</div>':'')+'</div>';
  if(isHoliday(c))h+='<div class="holi-banner">🏖️ 假期模式：今天只要通关 '+coreNeed(c)+' 关就算达标，闯关更轻松～</div>';
  return h;
@@ -2741,19 +2789,20 @@ function challengeLevel(id){const r=R(),c=child(r);const t=taskById(c,id);if(!t)
  day.pending.push(id);day.rejected=day.rejected.filter(x=>x!==id);notify(c,'parent','闯关待确认：'+t.name);if(ROLE==='child')childSubmitEvent('task',{taskId:id,name:t.name,quest:true});saveChild(r,c);render();toast('⚔️ 已挑战「'+t.name+'」，等家长确认通关');}
 
 /* ===== CHILD: 今日 ===== */
-function vChildToday(c){const day=dd(c);const fm=day.rl?0:freeMin(c),jm=day.rl?0:day.jMin;
- let h='<div class="sum-card"><div style="font-size:12px;opacity:.8">📅 今日屏幕时间来源（分钟）</div><div class="sum-grid"><div class="sum-item"><div class="sum-num">'+fm+'</div><div class="sum-sub">每日免费</div></div><div class="sum-item"><div class="sum-num">'+c.bank+'</div><div class="sum-sub">阅读存折</div></div><div class="sum-item"><div class="sum-num">'+jm+'</div><div class="sum-sub">跳绳换得</div></div></div></div>';
- if(isHoliday(c))h+='<div class="holi-banner">🏖️ 假期模式生效中：今天只要完成 '+coreNeed(c)+' 项必做习惯就达标，免费屏幕更多、阅读存折1.5倍、不会断签，放松一下也没关系～</div>';
+function vChildToday(c){const day=dd(c);const sport=sportRemain(c),free=displayFreeMin(c);
+ let h='<div class="sum-card"><div style="font-size:12px;opacity:.8">📅 今日实际可用屏幕时间（分钟）</div><div class="sum-grid"><div class="sum-item"><div class="sum-num">'+c.bank+'</div><div class="sum-sub">跨天屏幕存折</div></div><div class="sum-item"><div class="sum-num">'+sport+'</div><div class="sum-sub">今日运动剩余</div></div><div class="sum-item"><div class="sum-num">'+availMin(c)+'</div><div class="sum-sub">实际可用合计</div></div></div></div>';
+ if(free>0)h+='<div class="hint" style="margin:0 4px 8px">今日免费提示：'+free+'分钟，仅作家庭规则提示，不计入今日可用时间。</div>';
+ if(isHoliday(c))h+='<div class="holi-banner">🏖️ 假期模式生效中：今天只要完成 '+coreNeed(c)+' 项必做习惯就达标；阅读兑换比例更优惠，仍需另行申请审批。</div>';
  else if(c.mode==='leave'||c.mode==='travel')h+='<div class="otwarn" style="background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF">'+(c.mode==='leave'?'🤒 今天是请假/生病模式，不计断签':'✈️ 今天是旅行日，不影响连续记录')+'</div>';
  h+='<div class="hint" style="margin:0 4px 8px">点卡片"填写"今天做到的事：<b style="color:#92400E">黄=待家长确认</b>、<b style="color:#065F46">绿=已确认计星</b>。被退回会有提示，可重新提交。</div>';
  const cats={};for(const t of visibleTasks(c)){if(!cats[t.cat])cats[t.cat]=[];cats[t.cat].push(t);}
  for(const cat in cats){const arr=cats[cat];const dn=arr.filter(t=>day.done.includes(t.id)).length;h+='<div class="cat-hdr">'+cat+' ('+dn+'/'+arr.length+')</div>';
   for(const t of arr){const isDone=day.done.includes(t.id),isPend=day.pending.includes(t.id),isRej=day.rejected.includes(t.id);const cls=isDone?'done':(isPend?'pend':'');const mark=isDone?'✓':(isPend?'…':'');let badge='<div class="hstar">+'+t.star+'★</div>';if(isDone)badge='<span class="sbadge sb-ok">已确认</span>';else if(isPend)badge='<span class="sbadge sb-pend">待确认</span>';else if(isRej)badge='<span class="sbadge sb-rej">已退回·重交</span>';
    h+='<div class="habit '+cls+'" onclick="childSubmit(\''+t.id+'\')"><div class="hck">'+mark+'</div><div class="hinfo"><div class="hname">'+t.name+' <span style="font-size:9px;color:#C4B5FD">'+freqTag(t.freq)+'</span></div><div class="hsub">'+(t.standard||'')+'</div></div>'+badge+'</div>';}}
- h+='<div class="card"><div class="ctitle">📖 阅读记录</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">阅读30分钟 → 存+10分钟娱乐屏幕 +2★</div><div class="inp-row"><input class="ninp" id="rdInp" type="number" min="30" step="30" value="30"><button class="btn bg" onclick="childReading()">提交阅读</button></div>';
+ h+='<div class="card"><div class="ctitle">📖 阅读记录</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">阅读确认后进入可兑换阅读余额；兑换需另行申请 +2★</div><div class="inp-row"><input class="ninp" id="rdInp" type="number" min="30" step="30" value="30"><button class="btn bg" onclick="childReading()">提交阅读</button></div>';
  if(day.rdPend>0)h+='<div class="otwarn" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">⏳ 已提交阅读 '+day.rdPend+' 分钟，等家长确认</div>';
- h+='<div class="hint">今日已确认阅读: '+day.rdMins+'分钟 | 存折: <b style="color:#10B981">'+c.bank+'</b>分钟</div></div>';
- h+='<div class="card"><div class="ctitle">🪢 运动跳绳（只调整今日屏幕）</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">当场用不累计，不进存折，次日0点清零；屏幕时间靠阅读存折兑换</div><div class="inp-row"><input class="ninp" id="jmpInp" type="number" min="500" step="500" value="500"><button class="btn bp" onclick="childJump()">提交跳绳</button></div>';
+ h+='<div class="hint">今日已确认阅读: '+day.rdMins+'分钟 | 可兑换阅读: <b style="color:#10B981">'+c.readExchangeBalance+'</b>分钟</div></div>';
+ h+='<div class="card"><div class="ctitle">🪢 运动跳绳（只调整今日屏幕）</div><div style="font-size:13px;color:#9CA3AF;margin-bottom:6px">当场用不累计，不进存折，次日0点清零；不足部分再从跨天屏幕存折扣除</div><div class="inp-row"><input class="ninp" id="jmpInp" type="number" min="500" step="500" value="500"><button class="btn bp" onclick="childJump()">提交跳绳</button></div>';
  if(day.jPend>0)h+='<div class="otwarn" style="background:#FFFBEB;border-color:#FDE68A;color:#92400E">⏳ 已提交跳绳 '+day.jPend+' 个，等家长确认</div>';
  h+='<table class="rtbl"><tr><td>500个</td><td>=10分钟·+1★</td></tr><tr><td>1000个</td><td>=20分钟·+2★</td></tr><tr><td>1500个</td><td>=30分钟·+3★</td></tr><tr><td>2000个</td><td>=40分钟</td></tr><tr><td>2500个</td><td>=60分钟</td></tr><tr><td>3000个</td><td>=80分钟</td></tr></table></div>';
  return h;}
@@ -2806,19 +2855,12 @@ function vShop(c){let h='<div class="card" style="background:linear-gradient(135
  return h;}
 
 /* ===== CHILD: TV ===== */
-function vTV(c){const day=dd(c);const avSec=tvAvailSec(c);const running=c.tv.running;let remainSec=avSec;if(running){const el=Math.floor((Date.now()-c.tv.startTs)/1000);remainSec=Math.max(0,c.tv.allowSec-el);}
- const fm=day.rl?0:freeMin(c),jm=day.rl?0:day.jMin,tvg=day.rl?0:(day.tvGrant||0);const avail=fm+jm+c.bank+tvg,used=day.scrUsed,remainMin=Math.max(0,avail-used);
- let h='<div class="tv-card"><div style="font-size:13px;opacity:.85;margin-bottom:6px">📺 看电视/视频倒计时</div><div class="tv-clock" id="tvClock">'+fmtClock(running?remainSec:avSec)+'</div><div class="tv-sub">剩余可看 '+remainMin+' 分钟</div><div class="prgw" style="margin-top:14px"><div class="prg" id="tvBar" style="width:'+(running&&c.tv.allowSec>0?(100-remainSec/c.tv.allowSec*100):0)+'%"></div></div><div class="tv-state">'+(running?'⏳ 正在计时…到点自动结束':'⏸️ 未开始')+'</div><div class="tv-btns">';
- if(running)h+='<button class="btn br bblock" onclick="tvStop(true)">⏹️ 停止并结算</button>';else h+='<button class="btn bg bblock'+(remainMin<=0?' bdis':'')+'" onclick="tvStart()">▶️ 开始看电视</button>';
- h+='</div></div>';
- /* v8.5：孩子端自定义看电视时长申请 */
- h+='<div class="card"><div class="ctitle">📺 申请看电视时长</div>';
- if(day.tvPend>0){h+='<div class="otwarn" style="background:#FEF9C3;color:#92400E;border-color:#FDE68A">⏳ 已申请 '+day.tvPend+' 分钟，等家长确认…</div>';}
- h+='<div class="hint" style="margin-top:0">自己填写今天想看多久（分钟），提交后由家长确认；确认后计入你的可看时长。</div><div class="inp-row"><input class="ninp" id="tvReqMin" type="number" min="1" step="5" placeholder="例：30"><button class="btn bp" onclick="tvRequest()">提交申请</button></div></div>';
- h+='<div class="sum-card"><div style="font-size:12px;opacity:.8">⏱️ 可用时长来源</div><div class="sum-grid"><div class="sum-item"><div class="sum-num">'+fm+'</div><div class="sum-sub">每日免费</div></div><div class="sum-item"><div class="sum-num">'+c.bank+'</div><div class="sum-sub">阅读存折</div></div><div class="sum-item"><div class="sum-num">'+jm+'</div><div class="sum-sub">跳绳换得</div></div><div class="sum-item"><div class="sum-num">'+tvg+'</div><div class="sum-sub">看电视额度</div></div></div><div style="font-size:11px;opacity:.85;margin-top:10px;line-height:1.6">已用 '+used+' 分钟。计时结束自动扣减；超时双倍扣阅读存折。</div></div>';
- h+='<div class="card"><div class="ctitle">📱 屏幕自控</div><div style="display:flex;gap:8px"><button class="btn bg bsm" style="flex:1" onclick="logSelfStop(true)">✅ 到点自己停 +2★</button><button class="btn bgray bsm" style="flex:1" onclick="logSelfStop(false)">被提醒一次</button></div><div class="hint">今日自己停 '+day.selfStop+' 次 · 被提醒 '+day.remind+' 次</div></div>';
- if(day.rl)h+='<div class="otwarn">🚨 今天触犯红线，屏幕时间已全部取消，明天恢复。</div>';
- return h;}
+function vTV(c){const day=dd(c),sport=sportRemain(c),avail=availMin(c),free=displayFreeMin(c),avSec=tvAvailSec(c),running=c.tv.running;let remainSec=avSec;if(running){const el=Math.floor((Date.now()-c.tv.startTs)/1000);remainSec=Math.max(0,c.tv.allowSec-el);}let h='<div class="tv-card"><div style="font-size:13px;opacity:.85">跨天屏幕存折</div><div style="font-size:34px;font-weight:900;margin-top:4px">'+c.bank+' 分钟</div><div class="tv-sub">今日运动剩余 '+sport+' 分钟 · 今日实际可用 '+avail+' 分钟</div><div class="tv-clock" id="tvClock" style="font-size:30px;margin-top:12px">'+fmtClock(running?remainSec:avSec)+'</div><div class="tv-state">'+(running?'⏳ 正在计时，优先使用运动时间':'⏸️ 未开始')+'</div><div class="tv-btns">';if(running)h+='<button class="btn br bblock" onclick="tvStop(true)">⏹️ 停止并结算</button>';else h+='<button class="btn bg bblock'+(avail<=0?' bdis':'')+'" onclick="tvStart()">▶️ 开始看屏幕</button>';h+='</div></div>';
+ if(free>0)h+='<div class="card" style="border:1.5px solid #FDE68A;background:#FFFBEB"><div class="ctitle">今日免费提示：'+free+' 分钟</div><div class="hint">仅作家庭规则提示，不计入屏幕存折或今日可用时间。</div></div>';
+ const per=isHoliday(c)?15:10;h+='<div class="card"><div class="ctitle">📖 阅读兑换屏幕</div><div class="irow"><span class="ilbl">可兑换阅读余额</span><span class="ival cgrn">'+c.readExchangeBalance+' 分钟</span></div><div class="hint">兑换比例：阅读30分钟 = 屏幕'+per+'分钟；提交后等家长审批。</div><div class="inp-row"><input class="ninp" id="readExMin" type="number" min="30" step="30" value="30"><button class="btn bg" onclick="submitReadingExchange()">提交兑换</button></div></div>';
+ h+='<div class="card"><div class="ctitle">📝 申请调整屏幕存折</div><div style="display:flex;gap:8px"><select id="bankReqDir" style="flex:1"><option value="plus">增加</option><option value="minus">减少</option></select><input class="ninp" id="bankReqMin" type="number" min="1" placeholder="分钟" style="flex:1"></div><input class="tinp" id="bankReqReason" placeholder="申请原因" style="margin-top:8px"><button class="btn bp bblock" onclick="submitBankAdjust()">提交申请</button></div>';
+ h+='<div class="card"><div class="ctitle">📋 申请记录</div>'+screenRequestList(c,false)+'</div><div class="card"><div class="ctitle">📒 屏幕存折流水</div>'+screenLedgerList(c)+'</div>';
+ h+='<div class="card"><div class="ctitle">📱 屏幕自控</div><div style="display:flex;gap:8px"><button class="btn bg bsm" style="flex:1" onclick="logSelfStop(true)">✅ 到点自己停 +2★</button><button class="btn bgray bsm" style="flex:1" onclick="logSelfStop(false)">被提醒一次</button></div><div class="hint">今日自己停 '+day.selfStop+' 次 · 被提醒 '+day.remind+' 次</div></div>';if(day.rl)h+='<div class="otwarn">🚨 今天触犯红线，屏幕时间已取消，明天恢复。</div>';return h;}
 
 /* ===== MONEY (双端) ===== */
 function vMoney(c){let h='<div class="money-card"><div class="money-bal">💰 '+fmtMoney(c.money)+' 元</div><div class="money-lbl">当前零花钱余额</div></div>';
@@ -2875,7 +2917,7 @@ function vForest(c){const day=dd(c);const running=c.focus.running;let remainSec=
  /* 专注奖励说明 */
  h+='<div class="fstat-row"><div class="fstat"><div class="v">'+c.forest.totalFocusMin+'</div><div class="l">累计专注(分)</div></div><div class="fstat"><div class="v">'+c.forest.trees.filter(t=>t.alive).length+'</div><div class="l">长成的树</div></div><div class="fstat"><div class="v">'+day.focusMin+'</div><div class="l">今日专注(分)</div></div></div>';
  h+='</div>';
- h+='<div class="card"><div class="ctitle">🎁 专注奖励规则</div><div class="hint" style="margin-top:0">每专注 5 分钟 +1★；专注满 1 分钟 = 1 分钟阅读存折（看电视时间币）。中途离开小树枯萎，没有奖励——坚持到底才有收获！</div></div>';
+ h+='<div class="card"><div class="ctitle">🎁 专注奖励规则</div><div class="hint" style="margin-top:0">每专注 5 分钟 +1★；专注奖励不再直接增加屏幕存折。中途离开小树枯萎，没有奖励——坚持到底才有收获！</div></div>';
  /* 我的森林 */
  h+='<div class="card"><div class="ctitle">🌲 我的森林 <span style="font-size:11px;color:#9CA3AF;font-weight:600">共 '+c.forest.trees.length+' 棵</span></div>';
  if(!c.forest.trees.length)h+='<div class="empty"><div class="emico">🌱</div><div>还没有种下任何树，开始第一次专注吧</div></div>';
@@ -3047,13 +3089,13 @@ function notifPanel(){const c=child(R());markNotifsRead();const list=c.notifs.fi
 function vParentConfirm(c){const day=dd(c);let h='';
  const pendT=day.pending.map(id=>taskById(c,id)).filter(Boolean);
  const moneyPend=c.money_log.filter(m=>m.status==='pending');
- const total=pendT.length+(day.rdPend>0?1:0)+(day.jPend>0?1:0)+((day.tvPend||0)>0?1:0)+moneyPend.length;
+ const screenPend=(c.screenRequests||[]).filter(q=>q.status==='pending');const total=pendT.length+(day.rdPend>0?1:0)+(day.jPend>0?1:0)+screenPend.length+moneyPend.length;
  h+='<div class="sum-card"><div style="font-size:12px;opacity:.8">⏳ 待确认事项</div><div style="font-size:30px;font-weight:900;margin-top:4px">'+total+' 项</div><div style="font-size:11px;opacity:.85;margin-top:2px">确认后才正式计星/入账</div></div>';
  if(total===0)h+='<div class="card"><div class="empty"><div class="emico">✅</div><div>没有待确认的内容</div></div></div>';
  for(const t of pendT)h+='<div class="pend-card"><div class="pend-h"><span class="pend-t">'+t.name+'</span><span class="sbadge sb-pend">+'+t.star+'★</span></div><div class="pend-d">'+(t.standard||'')+'</div><div class="pend-btns"><button class="btn bg bsm" style="flex:1" onclick="confirmCheckin(\''+t.id+'\',true)">✓ 确认计星</button><button class="btn bgray bsm" style="flex:1" onclick="confirmCheckin(\''+t.id+'\',false)">退回</button></div></div>';
- if(day.rdPend>0)h+='<div class="pend-card"><div class="pend-h"><span class="pend-t">📖 阅读 '+day.rdPend+' 分钟</span><span class="sbadge sb-pend">+'+Math.floor(day.rdPend/30)*2+'★</span></div><div class="pend-d">确认后存折+'+Math.floor(day.rdPend/30)*10+'分钟</div><div class="pend-btns"><button class="btn bg bsm" style="flex:1" onclick="confirmReading(true)">✓ 确认</button><button class="btn bgray bsm" style="flex:1" onclick="confirmReading(false)">退回</button></div></div>';
+ if(day.rdPend>0)h+='<div class="pend-card"><div class="pend-h"><span class="pend-t">📖 阅读 '+day.rdPend+' 分钟</span><span class="sbadge sb-pend">+'+Math.floor(day.rdPend/30)*2+'★</span></div><div class="pend-d">确认后增加可兑换阅读余额，不直接增加屏幕存折</div><div class="pend-btns"><button class="btn bg bsm" style="flex:1" onclick="confirmReading(true)">✓ 确认</button><button class="btn bgray bsm" style="flex:1" onclick="confirmReading(false)">退回</button></div></div>';
  if(day.jPend>0){const{min,st}=calcJump(day.jPend);h+='<div class="pend-card"><div class="pend-h"><span class="pend-t">🪢 跳绳 '+day.jPend+' 个</span><span class="sbadge sb-pend">+'+st+'★</span></div><div class="pend-d">确认后换得'+min+'分钟</div><div class="pend-btns"><button class="btn bg bsm" style="flex:1" onclick="confirmJump(true)">✓ 确认</button><button class="btn bgray bsm" style="flex:1" onclick="confirmJump(false)">退回</button></div></div>';}
- if((day.tvPend||0)>0){h+='<div class="pend-card"><div class="pend-h"><span class="pend-t">📺 看电视申请 '+day.tvPend+' 分钟</span><span class="sbadge sb-pend">待确认</span></div><div class="pend-d">确认后计入今日电视额度 +'+day.tvPend+' 分钟</div><div class="pend-btns"><button class="btn bg bsm" style="flex:1" onclick="confirmTvReq(true)">✓ 确认</button><button class="btn bgray bsm" style="flex:1" onclick="confirmTvReq(false)">退回</button></div></div>';}
+ if(screenPend.length)h+='<div class="cat-hdr">屏幕存折申请</div>'+screenRequestList(c,true);
  for(const m of moneyPend){const isIn=m.amount>=0;h+='<div class="pend-card"><div class="pend-h"><span class="pend-t">💰 '+(isIn?'+':'-')+fmtMoney(Math.abs(m.amount))+'元 · '+m.source+'</span></div><div class="pend-btns"><button class="btn bg bsm" style="flex:1" onclick="confirmMoney(\''+m.id+'\',true)">确认入账</button><button class="btn bgray bsm" style="flex:1" onclick="confirmMoney(\''+m.id+'\',false)">退回</button></div></div>';}
  h+='<div class="cat-hdr">直接管理（家长可越过提交直接打勾计星）</div>';
  const cats={};for(const t of visibleTasks(c)){if(!cats[t.cat])cats[t.cat]=[];cats[t.cat].push(t);}
@@ -3160,7 +3202,7 @@ function vConfig(c){let h='';
  h+='<div class="cfg-row"><span class="nm">假期·阅读不计断签</span><div class="toggle'+(H.noStreakBreak?' on':'')+'" onclick="toggleHoliFlag(\'noStreakBreak\')"><div class="kn"></div></div></div>';
  h+='<div class="cfg-row"><span class="nm">假期·红线从宽(仅扣星不清屏)</span><div class="toggle'+(H.redlineLite?' on':'')+'" onclick="toggleHoliFlag(\'redlineLite\')"><div class="kn"></div></div></div>';
  h+='<button class="btn bg bsm bblock" style="margin-top:8px" onclick="saveHoliday()">✓ 保存假期参数</button>';
- h+='<div class="hint">假期生效时：免费屏幕额度提高、阅读存折按1.5倍存入、每日必做习惯门槛下调、超时不强制次日暂停、红线从宽(仅扣星)、连续打卡不断签。普通日规则不受影响。</div></div>';
+ h+='<div class="hint">假期生效时：阅读兑换比例为30分钟阅读换15分钟屏幕（仍需申请审批）、每日必做习惯门槛下调、红线从宽(仅扣星)、连续打卡不断签。免费分钟仅作家庭提示，不参与实际额度计算。</div></div>';
  /* ===== 其他临时模式 ===== */
  h+='<div class="card"><div class="ctitle">🎚️ 临时模式（单日）</div><div class="modebar"><button class="mode-b'+(c.mode==='normal'?' on':'')+'" onclick="setMode(\'normal\')">普通</button><button class="mode-b'+(c.mode==='leave'?' on':'')+'" onclick="setMode(\'leave\')">🤒请假</button><button class="mode-b'+(c.mode==='travel'?' on':'')+'" onclick="setMode(\'travel\')">✈️旅行</button></div>';
  h+='<div class="cfg-row"><span class="nm">养成宠物</span><div class="toggle'+(c.cfg.petOn?' on':'')+'" onclick="togglePet()"><div class="kn"></div></div></div><div class="cfg-row"><span class="nm">倒计时结束硬锁定</span><div class="toggle'+(c.cfg.lockOnEnd?' on':'')+'" onclick="toggleLock()"><div class="kn"></div></div></div><div class="hint">请假/旅行：当天免打卡、不计断签。假期请用上方「假期模式」。</div></div>';
@@ -3189,16 +3231,13 @@ function vConfig(c){let h='';
 function switchChildPrompt(){if(!reqP())return;const r=R();if(r.children.length<2){toast('当前只有一个孩子');return;}const names=r.children.map((id,i)=>(i+1)+'. '+r.childData[id].name).join('\n');const pick=prompt('切换到第几个孩子？\n'+names,'1');const idx=parseInt(pick)-1;if(idx>=0&&idx<r.children.length)switchChild(r.children[idx]);}
 
 /* ===== PARENT: 屏幕 ===== */
-function vScreen(c){const day=dd(c);const fm=day.rl?0:freeMin(c),jm=day.rl?0:day.jMin,bk=c.bank,tvg=day.rl?0:(day.tvGrant||0);const avail=fm+jm+bk+tvg,used=day.scrUsed,remain=Math.max(0,avail-used);const pct=avail>0?Math.min(100,used/avail*100):0;
- let h='<div class="scrcard"><div style="font-size:12px;opacity:.8">今日剩余娱乐屏幕时间（分钟）</div><div><span class="scrbig">'+remain+'</span><span style="font-size:16px;font-weight:600"> 分钟</span></div><div class="scrgrid"><div class="sci"><div class="scin">'+fm+'</div><div class="scil">每日免费</div></div><div class="sci"><div class="scin">'+jm+'</div><div class="scil">跳绳换得</div></div><div class="sci"><div class="scin">'+bk+'</div><div class="scil">阅读存折</div></div><div class="sci"><div class="scin">'+tvg+'</div><div class="scil">看电视额度</div></div></div><div class="prgw"><div class="prg'+(pct>=100?' dang':pct>=80?' warn':'')+'" style="width:'+pct+'%"></div></div><div class="scrdtl">已用 '+used+'分钟 · 可用合计 '+avail+'分钟</div></div>';
- /* v8.5：家长端「今日电视额度」自由增减入口（即时生效、同步孩子端） */
- h+='<div class="card"><div class="ctitle">📺 今日电视额度调整</div><div class="irow"><span class="ilbl">当前电视额度</span><span class="ival cgold">'+tvg+' 分钟</span></div><div class="inp-row"><input class="ninp" id="tvGrantInp" type="number" step="5" placeholder="正数增加/负数扣减"><button class="btn bp" onclick="adjTvGrantInput()">应用</button></div><div class="qbtns"><button class="btn bo bsm" onclick="adjTvGrant(10)">+10</button><button class="btn bo bsm" onclick="adjTvGrant(30)">+30</button><button class="btn bo bsm" onclick="adjTvGrant(-10)">-10</button><button class="btn bo bsm" onclick="adjTvGrant(-30)">-30</button></div><div class="hint">直接增减今天可看电视的额度，即时生效并同步到孩子端。</div></div>';
- h+='<div class="card"><div class="ctitle">📱 记录娱乐屏幕（B类）</div><div class="inp-row"><input class="ninp" id="scrInp" type="number" min="1" step="5" value="15"><button class="btn bp" onclick="doScrInput()">记录</button></div><div class="qbtns"><button class="btn bo bsm" onclick="qScr(5)">+5</button><button class="btn bo bsm" onclick="qScr(10)">+10</button><button class="btn bo bsm" onclick="qScr(15)">+15</button><button class="btn bo bsm" onclick="qScr(30)">+30</button></div>';
- if(used>avail&&avail>0){const o=used-avail;h+='<div class="otwarn">⚠️ 超时'+o+'分钟！已从阅读存折双倍扣除'+o*2+'分钟</div>';}
- h+='</div>';
- h+='<div class="card"><div class="ctitle">📖 阅读存折</div><div class="irow"><span class="ilbl">存折余额(跨天保留)</span><span class="ival cgold">'+c.bank+' 分钟</span></div><div class="irow"><span class="ilbl">今日阅读</span><span class="ival cgrn">'+day.rdMins+' 分钟</span></div><div class="irow"><span class="ilbl">今日存入</span><span class="ival cgrn">+'+day.bankAdded+'</span></div><div class="irow"><span class="ilbl">今日消耗</span><span class="ival cred">-'+day.bankUsed+'</span></div></div>';
- h+='<div class="card"><div class="ctitle">🪢 今日跳绳(次日0点清零)</div><div class="irow"><span class="ilbl">跳绳数</span><span class="ival cpur">'+day.jCnt+' 个</span></div><div class="irow"><span class="ilbl">换得屏幕</span><span class="ival cgrn">'+day.jMin+' 分钟</span></div></div>';
- h+='<div class="card"><button class="btn br bblock" onclick="resetScr()">🔄 重置今日屏幕记录</button></div>';return h;}
+function vScreen(c){const day=dd(c),sport=sportRemain(c),avail=availMin(c),free=displayFreeMin(c);let h='<div class="scrcard"><div style="font-size:12px;opacity:.8">跨天屏幕存折余额</div><div><span class="scrbig">'+c.bank+'</span><span style="font-size:16px;font-weight:600"> 分钟</span></div><div class="scrgrid"><div class="sci"><div class="scin">'+c.readExchangeBalance+'</div><div class="scil">可兑换阅读</div></div><div class="sci"><div class="scin">'+sport+'</div><div class="scil">今日运动剩余</div></div><div class="sci"><div class="scin">'+avail+'</div><div class="scil">今日实际可用</div></div></div><div class="scrdtl">今日已使用 '+day.scrUsed+' 分钟 · 运动已用 '+day.jUsed+' 分钟 · 存折已用 '+day.bankUsed+' 分钟</div></div>';
+ if(free>0)h+='<div class="card" style="border:1.5px solid #FDE68A;background:#FFFBEB"><div class="ctitle">今日免费提示：'+free+' 分钟</div><div class="hint">仅作家庭规则提示，不计入屏幕存折或今日可用时间。</div></div>';
+ h+='<div class="card"><div class="ctitle">➕➖ 家长直接调整屏幕存折</div><input class="tinp" id="bankAdjMin" type="number" step="1" placeholder="正数增加 / 负数减少"><input class="tinp" id="bankAdjReason" placeholder="调整原因"><button class="btn bp bblock" onclick="parentAdjustBank()">应用调整</button></div>';
+ h+='<div class="card"><div class="ctitle">⏳ 待审批申请</div>'+screenRequestList(c,true)+'</div>';
+ h+='<div class="card"><div class="ctitle">📅 周五、周末免费提示配置</div><div class="cfg-row"><span class="nm">周五提示（分钟）</span><input id="freeFri" type="number" min="0" value="'+c.cfg.freeDisplayFriday+'"></div><div class="cfg-row"><span class="nm">周六提示（分钟）</span><input id="freeSat" type="number" min="0" value="'+c.cfg.freeDisplaySaturday+'"></div><div class="cfg-row"><span class="nm">周日提示（分钟）</span><input id="freeSun" type="number" min="0" value="'+c.cfg.freeDisplaySunday+'"></div><button class="btn bg bblock" onclick="saveFreeDisplayCfg()">保存提示</button><div class="hint">设置为0时当天不显示；提示不参与倒计时、扣减或超时计算。</div></div>';
+ h+='<div class="card"><div class="ctitle">📱 记录屏幕使用</div><div class="inp-row"><input class="ninp" id="scrInp" type="number" min="1" step="5" value="15"><button class="btn bp" onclick="doScrInput()">记录</button></div><div class="qbtns"><button class="btn bo bsm" onclick="qScr(5)">+5</button><button class="btn bo bsm" onclick="qScr(10)">+10</button><button class="btn bo bsm" onclick="qScr(15)">+15</button><button class="btn bo bsm" onclick="qScr(30)">+30</button></div></div>';
+ h+='<div class="card"><div class="ctitle">📒 兑换与使用流水</div>'+screenLedgerList(c)+'</div><div class="card"><button class="btn br bblock" onclick="resetScr()">🔄 重置今日屏幕记录并恢复来源</button></div>';return h;}
 
 /* ===== PARENT: 数据看板 ===== */
 function vDash(c){const days=last7();let totalDaily=0,doneDaily=0;
@@ -3255,7 +3294,8 @@ function saveTutor(){if(!reqP())return;const subject=gv('mTutSubj').trim();if(!s
  saveChild(r,c);render();closeM('mTutor');toast('📚 补习安排已保存并同步');}
 function delTutor(id){if(!reqP())return;if(!confirm('删除这条补习安排？'))return;const r=R(),c=child(r);c.tutoring=c.tutoring.filter(t=>t.id!==id);saveChild(r,c);render();toast('已删除');}
 function last7(){const out=[];const base=getSGT();for(let i=6;i>=0;i--){const d=new Date(base);d.setDate(base.getDate()-i);out.push(d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate()));}return out;}
-/* ===== 课后补习时间表（WEEKDAY_NAMES 已移至顶部常量区） ===== */
+/* ===== 课后补习时间表 ===== */
+const WEEKDAY_NAMES=['周日','周一','周二','周三','周四','周五','周六'];
 function tutById(c,id){return c.tutoring.find(t=>t.id===id);}
 function todayTutorings(c){const dow=sgtDow();return c.tutoring.filter(t=>t.weekday===dow).sort((a,b)=>a.start.localeCompare(b.start));}
 function nowMinutes(){const d=getSGT();return d.getHours()*60+d.getMinutes();}
@@ -3271,15 +3311,15 @@ function rulesHTML(){return ''+
  '<div class="rlitem"><div class="rlt">红线3：做危险的事</div><div class="rld">不做高空、明火、锐器等危险行为。</div></div>'+
  '<div class="rlitem"><div class="rlt">红线4：网络泄露隐私</div><div class="rld">不公开个人身份信息、位置、学校等。</div></div>'+
  '<div class="rlitem"><div class="rlt">红线5：大撒谎作弊</div><div class="rld">严禁考试作业作弊与编造重大谎言。</div></div>'+
- acc('💰 双货币体系',['⭐星星：成长分，长期积累不清零，用于升级/兑换商城/心愿','⏱️时间币(屏幕分钟)：短期消耗，跳绳/阅读/免费额度获得','星星消耗需家长审批；兑换时先冻结，通过才扣除，驳回返还'])+
- acc('📱 屏幕时间规则',['平日0分钟免费 / 周五60分钟 / 周末每天15分钟','跳绳当场换：500=10,1000=20,1500=30,2000=40,2500=60,3000=80(不可存)','阅读30分钟→存折+10分钟+2★(存折跨天保留)','超时→双倍扣阅读存折；余额0→次日娱乐暂停','跳绳换得与已用次日0:00清零；统一SGT时区判定'])+
+ acc('💰 双货币体系',['⭐星星：成长分，长期积累不清零，用于升级/兑换商城/心愿','⏱️时间币(屏幕分钟)：短期消耗，运动兑换与审批通过的屏幕存折','星星消耗需家长审批；兑换时先冻结，通过才扣除，驳回返还'])+
+ acc('📱 屏幕时间规则',['屏幕时间由跨天屏幕存折和今日运动兑换时间组成','使用时优先扣今日运动时间，不足部分再扣屏幕存折','阅读确认后只增加可兑换阅读余额；另行申请兑换，家长通过后才增加存折','周五/周末免费分钟仅作家庭提示，不参与倒计时、扣减或超时计算','运动换得与已用次日0:00清零；统一SGT时区判定'])+
  acc('🌟 等级 / 连续打卡 / 里程碑',['等级：萌芽0-200 / 达人200-500 / 高手500-1000 / 大师1000+(可配置)','连续打卡：每日完成核心任务+1，断签清零(容忍天数可配置)','里程碑：7天+10★ / 30天+50★ / 100天+200★ 自动发放并解锁勋章'])+
  acc('⭐ 星星增减',['生活自理+1★ / 学习执行+2★ / 安全演练+5★ / 诚实+5★(每周各最多1次)','触犯红线-5★ / 伤人话-2★ / 屏幕哭闹-1★','所有打卡需家长确认；家长也可直接打勾或手动加减'])+
  acc('🔄 参与流程',['孩子端：点卡片"填写"→黄色待确认；被退回可重新提交','家长端"确认"页：确认计星 / 退回；也可直接管理','阅读/跳绳/零花钱同样支持"孩子申请→家长确认"','悬赏：家长发布→孩子领取→提交完成→家长确认发放(星星或零花钱)'])+
  acc('🛡️ 权限与合规',['孩子端无任何切到家长端的入口，敏感操作后端式校验(真实孩子即使走捷径调用也被拦截)','家长可一键"进入孩子端"代查看/代操作，右上角随时返回家长端，无需重新输密码','密码哈希存储(不存明文)；孩子密码由家长设置/重置','统一SGT时区，防改本机时间作弊；规则草稿-发布两态'])+
- acc('🏖️ 假期模式',['家长可开总开关或设假期时间段(区间内自动启用)','假期：平日/周末免费屏幕额度提高(默认30/60分)','假期：阅读存折按1.5倍存入(30分钟→+15分钟)','假期：每日必做习惯门槛下调(默认2项)，连续打卡不断签','假期：超时不强制次日暂停；红线从宽(仅扣星不清空全天屏幕)','普通日规则完全不受影响，假期参数家长可自定义'])+
+ acc('🏖️ 假期模式',['家长可开总开关或设假期时间段(区间内自动启用)','假期免费分钟仍仅作家庭规则提示，不参与实际额度计算','假期：阅读兑换比例为30分钟→15分钟，仍需另行申请审批','假期：每日必做习惯门槛下调(默认2项)，连续打卡不断签','假期：红线从宽(仅扣星不清空全天屏幕)','普通日规则完全不受影响，假期参数家长可自定义'])+
  acc('🗺️ 闯关系统',['闯关是星星/打卡的"游戏外壳"，通关=打卡确认，不改变积分逻辑','每天0:00按家长设定顺序生成当日关卡链，逐关解锁，当前关呼吸高亮','🟢普通关(日常)/👑BOSS关(每周演练·月度作品,给大奖+宝箱)/💎隐藏关(诚实加分等彩蛋)','通关BOSS/全通关掉宝箱，开箱随机奖励(概率家长可配)','每月一个主题章节，月底按完成度结算大奖','关卡顺序/类型/宝箱概率/章节主题/全通关奖励均家长可配，草稿-发布同步'])+
- acc('🌳 专注森林（v7）',['番茄钟专注种树：15/25/45分钟可选','中途离开小树枯萎且无奖励(损失厌恶)；坚持到底树长成','每专注5分钟+1★，专注1分钟=1分钟阅读存折(看电视时间币)','家长配置页可看专注趋势看板','统一SGT业务日，记录开始时间戳防作弊'])+
+ acc('🌳 专注森林（v7）',['番茄钟专注种树：15/25/45分钟可选','中途离开小树枯萎且无奖励(损失厌恶)；坚持到底树长成','每专注5分钟+1★，专注奖励星星，不再直接增加屏幕存折','家长配置页可看专注趋势看板','统一SGT业务日，记录开始时间戳防作弊'])+
  acc('🧑‍🎨 虚拟形象 & 图鉴（v7）',['捏脸+换装：脸型/发型/肤色/服装/配饰/背景，星星购买自主穿戴','五种进化形态：萌芽→成长→觉醒→进化→传说','进化由真实成长(累计星/连击)驱动，禁止花星跳级','学习值高→智慧光环，情商值高→亲和翅膀','宝箱/旅行掉落装备坐骑徽章，集齐套装解锁称号'])+
  acc('💗 情绪 & 宠物 & 财商（v7）',['每日情绪打卡(emoji+私密日记)，首次记录+1★','情绪急救站：4-7-8呼吸法引导','家长仅可见情绪趋势，看不到日记内容(隐私保护)','宠物随累计星升级，连击满7天外出旅行带回礼物','连击保护卡：断签当天自动消耗保住连击','储蓄三分法：Save存/Share分享/Spend花三罐+目标罐'])+
  acc('🏠 家庭 & 冒险 & 周报（v7）',['家庭副本：家长+孩子共同完成，双端打卡进度共享，达标全家得奖','叙事主线：学习岛/习惯林/学霸城/情商谷四大世界','完成今日任务推进剧情，章节通关解锁新故事','周报：本周vs上周对比(获星/完成率/专注/阅读)','里程碑命中主动推送家长；家长一键点赞/留言鼓励']);
@@ -3319,7 +3359,7 @@ function refreshSwitchBtn(){const sw=document.getElementById('hdrSwitch');if(!sw
  else{sw.style.display='';sw.textContent='退出登录';sw.onclick=childLogout;} /* 真实孩子：可退出登录回到账号选择(需家长/管理PIN才能进对应端，隔离不破坏) */
 }
 /* 孩子端退出登录：仅清登录态/会话，保留全部业务数据；回到登录页(进家长端仍需家长PIN) */
-function childLogout(){if(REALROLE!=='child'){logout();return;}if(!confirm('确定退出登录吗？你的星星、存折和记录都会保留。'))return;logout();}
+async function childLogout(){if(REALROLE!=='child'){await logout();return;}if(!confirm('确定退出登录吗？你的星星、存折和记录都会保留。'))return;await logout();}
 
 /* ===== INIT ===== */
 /* 补习闹钟检测：到提前提醒点弹窗+声音，防重复 */
@@ -3401,11 +3441,30 @@ function startRealtimePollFallback(){ if(_RT_TIMER)clearInterval(_RT_TIMER);
 }
 init();
 
-/* ===== v7.6 PWA：注册 Service Worker（离线缓存，添加到主屏幕后断网可用） ===== */
+/* ===== v8.9.0 PWA：GitHub Pages 相对路径 Service Worker 注册与主动更新 ===== */
 if('serviceWorker' in navigator){
   window.addEventListener('load',function(){
-    navigator.serviceWorker.register('service-worker.js').then(function(reg){
-      /* 注册成功，静默 */
+    let refreshed=false;
+    function sendSkipWaiting(worker){
+      try{if(worker)worker.postMessage({type:'SKIP_WAITING'});}catch(e){console.warn('发送 SKIP_WAITING 失败:',e);}
+    }
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(refreshed)return;
+      refreshed=true;
+      window.location.reload();
+    });
+    navigator.serviceWorker.register('./service-worker.js',{scope:'./',updateViaCache:'none'}).then(function(reg){
+      try{reg.update();}catch(e){console.warn('Service Worker 主动 update 失败:',e);}
+      if(reg.waiting)sendSkipWaiting(reg.waiting);
+      if(reg.installing)sendSkipWaiting(reg.installing);
+      reg.addEventListener('updatefound',function(){
+        const nw=reg.installing;
+        if(!nw)return;
+        sendSkipWaiting(nw);
+        nw.addEventListener('statechange',function(){
+          if(nw.state==='installed'||nw.state==='waiting')sendSkipWaiting(nw);
+        });
+      });
     }).catch(function(err){
       /* 注册失败不影响应用正常使用（如本地 file:// 直接打开时） */
       console.warn('Service Worker 注册失败（不影响在线使用）:',err);
