@@ -621,9 +621,9 @@ window.SUPABASE_CONFIG = {
      根因——孩子端所有待确认状态(day.pending/rdPend/jPend/money_log(pending)/bounty)都在
      child_state 里，但孩子端无 session 无法推 child_state，旧 Edge Function 只写 event_log
      不更新 child_state，对端 Realtime 收到后读的仍是旧 child_state，看不到这些 pending。
-     修复——childSubmitEvent 在 invoke('child-submit') 时额外携带 child_data:c（完整 child 对象）；
-     Edge Function 校验通过、写 event_log 后，用 child_data 整体 upsert child_state(onConflict:child_id)，
-     使全部提交类型(task/reading/jump/money/bounty)的待确认状态都同步到云端、对端可见。
+     修复——childSubmitEvent 在 invoke('child-submit') 时暂携 child_data:c 兼容字段；
+     新版 Edge Function 校验通过、写 event_log 后，忽略完整 child_data 覆盖，
+     仅按 type/payload 白名单合并 pending，使全部提交类型(task/reading/jump/money/bounty)的待确认状态同步到云端、对端可见。
      OUTBOX 离线补传同样携带 child_data 快照。
    [FIX-RESET] 修复后台「清空所有数据（恢复出厂）」无效：
      根因——旧 resetAll 只 removeItem 本地键后 reload，云端模式下 reload 触发 cloudPullAll
@@ -650,7 +650,7 @@ window.SUPABASE_CONFIG = {
    [FIX-SYNC] 跨设备同步 BUG 修复：孩子端无邮箱 Auth session，旧逻辑只做本地
      BroadcastChannel 广播（跨设备无效），导致另一设备家长端收不到待确认。
      childSubmitEvent 改为调用 Supabase Edge Function `child-submit`（child_id+PIN 哈希
-     自校验，函数内 service_role 写 event_log(pending)/合并 child_state），实现真正跨设备。
+     自校验，函数内 service_role 写 event_log(pending)/按白名单合并 child_state pending），实现真正跨设备。
      失败/离线兜底：保留本地广播 + 写离线 OUTBOX(event)，恢复网络由 cloudFlushOutbox 重放。
    [OPT-BATCH] 批量提交优化：levelStatus 放宽解锁条件——前置关 done(已确认)或 pending(已提交)
      即解锁下一关，孩子提交第1关后第2关立即解锁，可连续提交所有关；每关是否记星仍由家长逐个确认。
@@ -1048,7 +1048,7 @@ async function cloudInit(){
   /* BroadcastChannel：本地/离线模式下的跨标签页实时（也作为云端模式的本机即时回显） */
   try{ if('BroadcastChannel' in window){ CLOUD.bc=new BroadcastChannel('gracie_sync'); CLOUD.bc.onmessage=onLocalBroadcast; } }catch(e){}
   /* 网络状态监听 */
-  window.addEventListener('online',()=>{CLOUD.online=true;cloudFlushOutbox();cloudPullAll();});
+  window.addEventListener('online',async()=>{CLOUD.online=true;try{await cloudFlushOutbox();}catch(e){console.warn('cloudFlushOutbox 失败：',e);}if(REALROLE==='child'&&ROLE==='child'&&IMP===false){childSyncPull(true);}else if(typeof cloudEngaged==='function'&&cloudEngaged()){cloudPullAll();}});
   window.addEventListener('offline',()=>{CLOUD.online=false;});
   /* 载入离线待补传 */
   try{const o=localStorage.getItem(OUTBOX_KEY);if(o)CLOUD.outbox=JSON.parse(o)||[];}catch(e){CLOUD.outbox=[];}
@@ -1340,8 +1340,8 @@ async function cloudFlushOutbox(){
         else remain.push(it);
       }else if(it.kind==='event'){
         /* v8.2：孩子端离线提交补传——重放 child-submit Edge Function
-           v8.4：携带 child_data（优先用当前 CACHE 中最新 child，回退离线时保存的快照），
-           确保补传时云端 child_state 也被同步更新到含 pending 的最新状态。 */
+           v8.4/v8.9：暂携 child_data 兼容字段（优先用当前 CACHE 中最新 child，回退离线快照）；
+           新版服务端忽略完整 child_data 覆盖，仅按事件白名单合并对应 pending。 */
         const d=it.data||{};
         const cobj=(CACHE&&CACHE.childData[it.childLocalId])||null;
         const cloudId=(d.cloudId)||(cobj&&(cobj._cloudId||CLOUD.childIdMap[cobj.id]))||CLOUD.childIdMap[it.childLocalId];
@@ -1364,19 +1364,16 @@ async function cloudFlushOutbox(){
    旧逻辑 cloudActive() 返回 false，提交只做本地 BroadcastChannel 广播
    （仅同浏览器跨标签页有效，跨设备无效），导致另一台设备的家长端收不到待确认。
    修复：改为调用 Edge Function `child-submit`——用 child_id + PIN 在函数内自校验，
-   函数内以 service_role 写 event_log(pending) 并整体更新 child_state，
+   函数内以 service_role 写 event_log(pending)，并按事件白名单合并 child_state 中的 pending 状态，
    从而绕过「孩子端无邮箱 session 无法写云端」的限制，实现真正的跨设备同步。
    触发条件只需 CLOUD.sb 已就绪（anon 客户端，无需 session）+ 已知云端 child_id。
    --------------------------------------------------------------------
-   v8.4 关键补充：body 额外携带 child_data（孩子提交后的完整 child 对象）。
-   孩子端所有待确认状态（day.pending / day.rdPend / day.jPend / money_log(pending) /
-   bounty 状态等）都存在 child_state 里，而孩子端无 session 无法直接推 child_state；
-   旧 Edge Function 只写 event_log 不更新 child_state，导致家长端/后台端 Realtime
-   收到后读的仍是旧 child_state，看不到阅读/跳绳/零花钱/悬赏等 pending。
-   现在把完整 child 对象传给 Edge Function，由其以 service_role 整体 upsert
-   child_state，使全部提交类型的待确认状态都能被家长端与后台管理端读到。
-   注：各提交入口均先改 c 再调用本函数，且本函数读取的 c 与入口为同一缓存对象引用，
-   因此 child_data:c 必然包含本次刚写入的 pending 状态。
+   v8.4/v8.9 关键补充：body 暂留 child_data 兼容字段（孩子提交后的完整 child 对象）。
+   新版 Edge Function 不再信任 child_data 做整体覆盖；服务端只按 type 白名单与 payload
+   合并对应 pending 状态（day.pending / day.rdPend / day.jPend / money_log(pending) /
+   bounty 状态等），避免孩子端把完整 child_state 反向覆盖云端权威数据。
+   注：各提交入口均先改 c 再调用本函数，child_data:c 仅作为旧版兼容快照保留；
+   新版服务端以白名单事件合并结果为准。
    --------------------------------------------------------------------
    PIN 传递方式：前端 PIN 以哈希 cred:{salt,hash} 存储，无明文。本函数发送
    pin_hash(=cred.hash) 与 pin_salt(=cred.salt)，Edge Function 读取该孩子云端
@@ -1384,7 +1381,7 @@ async function cloudFlushOutbox(){
    才写库。孩子端不额外保存/传输明文 PIN，前后端统一使用同一哈希算法(hashPwd)。
    --------------------------------------------------------------------
    兜底：调用失败/异常或离线/无 child_id 时，保留本地广播（同浏览器即时回显）
-   并写入离线 OUTBOX（event 类型，含 child_data 快照），待网络恢复由
+   并写入离线 OUTBOX（event 类型，暂携 child_data 兼容快照），待网络恢复由
    cloudFlushOutbox() 重放补传。
    ==================================================================== */
 async function childSubmitEvent(type,payload){
@@ -1396,14 +1393,68 @@ async function childSubmitEvent(type,payload){
       const {error}=await CLOUD.sb.functions.invoke('child-submit',{
         body:{child_id:cloudId,pin_hash:cred.hash||'',pin_salt:cred.salt||'',type:type,payload:payload||{},child_data:c}
       });
-      if(!error){broadcastLocal('event',c.id);return true;}
+      if(!error){broadcastLocal('event',c.id);setTimeout(()=>childSyncPull(true),300);return true;}
       console.warn('child-submit 失败，转入本地广播+OUTBOX 兜底：',error);
     }catch(e){console.warn('child-submit 异常，转入本地广播+OUTBOX 兜底：',e);}
   }
-  /* 兜底：本地广播（同浏览器跨标签页即时）+ 离线 OUTBOX（待网络恢复重放，含完整 child 快照） */
+  /* 兜底：本地广播（同浏览器跨标签页即时）+ 离线 OUTBOX（待网络恢复重放，暂携 child_data 兼容快照） */
   broadcastLocal('event',c.id);
   pushOutbox('event',c.id,{type:type,payload:payload||{},cloudId:cloudId||null,child_data:c});
   return false;
+}
+
+/* ====================================================================
+   v8.9.0 真实孩子端 child-sync 拉取：孩子端无 Auth session，不能走 cloudPullAll。
+   仅 REALROLE==='child'、ROLE==='child'、IMP===false 时调用 child-sync Edge Function，
+   用 child_id + PIN hash/salt 自校验拉取服务端权威 child_state；写入本地 CACHE/localStorage
+   但绝不调用 saveChild/saveRoot/cloudPushChild，避免把拉取结果反推覆盖云端。
+   ==================================================================== */
+let CHILD_SYNC_TIMER=null,CHILD_SYNC_RUNNING=false,CHILD_SYNC_LAST_HASH=null;
+async function childSyncPull(silent){
+  if(!(REALROLE==='child'&&ROLE==='child'&&IMP===false))return false;
+  if(CHILD_SYNC_RUNNING)return false;
+  if(!CLOUD||!CLOUD.sb||!CLOUD.online)return false; /* Supabase/网络尚未就绪时静默等待 */
+  let r,c,cloudId,cred;
+  try{
+    r=R();c=child(r);if(!c)return false;
+    cloudId=c._cloudId||CLOUD.childIdMap[c.id];cred=c.cred||{};
+    if(!cloudId)return false;
+  }catch(e){if(!silent)console.warn('child-sync 准备失败：',e);return false;}
+  CHILD_SYNC_RUNNING=true;
+  try{
+    const {data,error}=await CLOUD.sb.functions.invoke('child-sync',{body:{child_id:cloudId,pin_hash:cred.hash||'',pin_salt:cred.salt||''}});
+    if(error){if(!silent)console.warn('child-sync 失败：',error);return false;}
+    let incoming=data&&(data.child_data||data.childData||data.data||data.child||data.state||data);
+    if(!incoming||typeof incoming!=='object')return true;
+    incoming=JSON.parse(JSON.stringify(incoming));
+    incoming.id=c.id;incoming.name=c.name;if(c.cred)incoming.cred=c.cred;incoming._cloudId=cloudId;
+    incoming=migrateChild(incoming);
+    const incHash=contentHash(normForHash(incoming));
+    const prevHash=contentHash(normForHash(c));
+    if(incHash&&prevHash&&incHash===prevHash){CHILD_SYNC_LAST_HASH=incHash;return true;}
+    if(incHash&&CHILD_SYNC_LAST_HASH===incHash&&prevHash===incHash)return true;
+    if(!r.childData)r.childData={};
+    if(!Array.isArray(r.children))r.children=[];
+    r.childData[incoming.id]=incoming;
+    if(!r.children.includes(incoming.id))r.children.push(incoming.id);
+    r.curChild=incoming.id;CID=incoming.id;CLOUD.childIdMap[incoming.id]=cloudId;
+    CACHE=r;CHILD_SYNC_LAST_HASH=incHash;
+    localSaveRoot(r);
+    broadcastLocal('root',incoming.id);
+    scheduleRender();
+    return true;
+  }catch(e){if(!silent)console.warn('child-sync 异常：',e);return false;}
+  finally{CHILD_SYNC_RUNNING=false;}
+}
+function startChildSyncPolling(){
+  if(!(REALROLE==='child'&&ROLE==='child'&&IMP===false)){stopChildSyncPolling();return;}
+  if(CHILD_SYNC_TIMER)return;
+  CHILD_SYNC_TIMER=setInterval(()=>childSyncPull(true),4000);
+  childSyncPull(true);
+}
+function stopChildSyncPolling(){
+  if(CHILD_SYNC_TIMER){clearInterval(CHILD_SYNC_TIMER);CHILD_SYNC_TIMER=null;}
+  CHILD_SYNC_LAST_HASH=null;
 }
 /* ---------- 存取（v8.0：业务层同步接口不变，内部走 CACHE + 云端/本地） ---------- */
 /* root()：返回内存 CACHE；首次从 localStorage 兜底载入（云端数据由 cloudPullAll 异步填充） */
@@ -2481,10 +2532,11 @@ async function migrateLocalToCloud(){
 }
 
 /* 家长一键进入孩子端（代理查看/代操作）。仅真实家长可用 */
-function impersonateChild(){if(!isParentAuth()){toast('需要家长权限');return;}if(TIMER){clearInterval(TIMER);TIMER=null;}IMP=true;ROLE='child';CUR_TAB='today';render();const c=child(R());if(c.tv.running)runTimerLoop();toast('👀 已进入孩子端（家长代理）');}
+function impersonateChild(){stopChildSyncPolling();if(!isParentAuth()){toast('需要家长权限');return;}if(TIMER){clearInterval(TIMER);TIMER=null;}IMP=true;ROLE='child';CUR_TAB='today';render();const c=child(R());if(c.tv.running)runTimerLoop();toast('👀 已进入孩子端（家长代理）');}
 /* 从孩子端代理视图返回家长端。仅真实家长可用，无需再次输密码 */
-function backToParent(){if(!isParentAuth()){toast('需要家长权限');return;}if(TIMER){clearInterval(TIMER);TIMER=null;}IMP=false;if(REALROLE==='admin'){ROLE='admin';CUR_TAB='overview';render();toast('↩️ 已返回后台管理');}else{ROLE='parent';CUR_TAB='today';render();toast('↩️ 已返回家长端');}}
+function backToParent(){stopChildSyncPolling();if(!isParentAuth()){toast('需要家长权限');return;}if(TIMER){clearInterval(TIMER);TIMER=null;}IMP=false;if(REALROLE==='admin'){ROLE='admin';CUR_TAB='overview';render();toast('↩️ 已返回后台管理');}else{ROLE='parent';CUR_TAB='today';render();toast('↩️ 已返回家长端');}}
 async function logout(){
+ stopChildSyncPolling();
  if(TIMER){clearInterval(TIMER);TIMER=null;}
  if(FOCUS_TIMER){clearInterval(FOCUS_TIMER);FOCUS_TIMER=null;}
  cloudRemoveRealtime();
@@ -2497,7 +2549,7 @@ async function logout(){
  document.getElementById('loginScreen').style.display='block';
  renderLogin();
 }
-function enterApp(){const r=R();CID=r.curChild;document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='flex';CUR_TAB=(REALROLE==='admin')?'overview':'today';render();const c=child(r);if(c.tv.running)runTimerLoop();if(c.focus&&c.focus.running)runFocusLoop();}
+function enterApp(){const r=R();CID=r.curChild;document.getElementById('loginScreen').style.display='none';document.getElementById('mainApp').style.display='flex';CUR_TAB=(REALROLE==='admin')?'overview':'today';render();const c=child(r);if(c.tv.running)runTimerLoop();if(c.focus&&c.focus.running)runFocusLoop();if(REALROLE==='child'&&ROLE==='child'&&IMP===false)startChildSyncPolling();else stopChildSyncPolling();}
 /* ===== v8.9 阅读兑换与屏幕存折申请 ===== */
 function submitReadingExchange(){const r=R(),c=child(r),mins=parseInt(gv('readExMin'),10)||0;if(mins<=0||mins%30!==0){toast('阅读分钟必须是30的正整数倍');return;}if(mins>(c.readExchangeBalance||0)){toast('可兑换阅读余额不足');return;}const per=isHoliday(c)?15:10,screen=mins/30*per;const req={id:'sr_'+uid(),type:'reading_exchange',readingMinutes:mins,screenMinutes:screen,change:screen,reason:'阅读时间兑换',status:'pending',createdAt:nowISO(),handledAt:null,handledBy:null};c.screenRequests.unshift(req);notify(c,'parent','阅读兑换申请：阅读'+mins+'分钟 → 屏幕'+screen+'分钟');if(ROLE==='child')childSubmitEvent('screen_request',{requestType:req.type,requestId:req.id,readingMinutes:mins,screenMinutes:screen});saveChild(r,c);render();toast('已提交阅读兑换申请');}
 function submitBankAdjust(){const r=R(),c=child(r),dir=gv('bankReqDir')==='minus'?-1:1,mins=parseInt(gv('bankReqMin'),10)||0,reason=gv('bankReqReason').trim();if(mins<=0){toast('请输入正整数分钟');return;}if(!reason){toast('请输入申请原因');return;}const change=dir*mins;const req={id:'sr_'+uid(),type:'bank_adjust',readingMinutes:0,screenMinutes:0,change,reason,status:'pending',createdAt:nowISO(),handledAt:null,handledBy:null};c.screenRequests.unshift(req);notify(c,'parent','屏幕存折调整申请：'+(change>0?'+':'')+change+'分钟');if(ROLE==='child')childSubmitEvent('screen_request',{requestType:req.type,requestId:req.id,change,reason});saveChild(r,c);render();toast('已提交存折调整申请');}
@@ -2566,7 +2618,7 @@ function renderAdmin(){const r=R();
 function swAdminTab(t){ADMIN_TAB=t;const sa=document.getElementById('scrollArea');if(sa)sa.scrollTop=0;renderAdmin();}
 
 /* admin → 以家长视图管理指定孩子（完整复用家长端全部功能） */
-function adminManageAsParent(cid){if(!reqA())return;const r=R();if(cid){r.curChild=cid;CID=cid;saveRoot(r);}IMP=false;ROLE='parent';CUR_TAB='today';render();toast('🛠️ 已进入家长视图（管理：'+child(R()).name+'）');}
+function adminManageAsParent(cid){stopChildSyncPolling();if(!reqA())return;const r=R();if(cid){r.curChild=cid;CID=cid;saveRoot(r);}IMP=false;ROLE='parent';CUR_TAB='today';render();toast('🛠️ 已进入家长视图（管理：'+child(R()).name+'）');}
 /* admin → 进入指定孩子端代操作 */
 function adminEnterChild(cid){if(!reqA())return;const r=R();if(cid){r.curChild=cid;CID=cid;saveRoot(r);}impersonateChild();}
 
@@ -3412,6 +3464,7 @@ function init(){buildModals();buildHeaderBtns();
  /* v7.1 补丁#7(P-07)：专注计时切后台/回来二次校验——到点结算、未到点续跑 */
  document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
+   if(REALROLE==='child'&&ROLE==='child'&&IMP===false)childSyncPull(true);
    if(!ROLE)return; /* 未登录不处理 */
    const c=child(R());
    if(c&&c.focus&&c.focus.running){
