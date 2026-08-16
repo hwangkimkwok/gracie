@@ -1413,17 +1413,23 @@ let CHILD_SYNC_TIMER=null,CHILD_SYNC_RUNNING=false,CHILD_SYNC_LAST_HASH=null;
 async function childSyncPull(silent){
   if(!(REALROLE==='child'&&ROLE==='child'&&IMP===false))return false;
   if(CHILD_SYNC_RUNNING)return false;
-  if(!CLOUD||!CLOUD.sb||!CLOUD.online)return false; /* Supabase/网络尚未就绪时静默等待 */
-  let r,c,cloudId,cred;
+  if(!CLOUD||!CLOUD.cfg||!CLOUD.cfg.url||!CLOUD.online)return false; /* Supabase/网络尚未就绪时静默等待 */
+  let r,c,cloudId,credential;
   try{
     r=R();c=child(r);if(!c)return false;
-    cloudId=c._cloudId||CLOUD.childIdMap[c.id];cred=c.cred||{};
+    cloudId=c._cloudId||CLOUD.childIdMap[c.id];credential=c.cred||{};
     if(!cloudId)return false;
   }catch(e){if(!silent)console.warn('child-sync 准备失败：',e);return false;}
   CHILD_SYNC_RUNNING=true;
   try{
-    const {data,error}=await CLOUD.sb.functions.invoke('child-sync',{body:{child_id:cloudId,pin_hash:cred.hash||'',pin_salt:cred.salt||''}});
-    if(error){if(!silent)console.warn('child-sync 失败：',error);return false;}
+    const response=await fetch(`${CLOUD.cfg.url}/functions/v1/child-sync`,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=UTF-8'},
+      body:JSON.stringify({child_id:cloudId,pin_hash:credential.hash||'',pin_salt:credential.salt||''}),
+      cache:'no-store'
+    });
+    const data=await response.json();
+    if(!response.ok){throw new Error('child-sync HTTP '+response.status+': '+((data&&data.error)?data.error:JSON.stringify(data)));}
     let incoming=data&&(data.child_data||data.childData||data.data||data.child||data.state||data);
     if(!incoming||typeof incoming!=='object')return true;
     incoming=JSON.parse(JSON.stringify(incoming));
