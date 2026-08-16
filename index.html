@@ -1419,37 +1419,45 @@ async function childSyncPull(silent){
     r=R();c=child(r);if(!c)return false;
     cloudId=c._cloudId||CLOUD.childIdMap[c.id];credential=c.cred||{};
     if(!cloudId)return false;
-  }catch(e){if(!silent)console.warn('child-sync 准备失败：',e);return false;}
+  }catch(e){console.warn('[child-sync] prepare error',{error:e&&e.message?e.message:e});return false;}
   CHILD_SYNC_RUNNING=true;
   try{
-    const response=await fetch(`${CLOUD.cfg.url}/functions/v1/child-sync`,{
+    const res=await fetch(`${CLOUD.cfg.url}/functions/v1/child-sync`,{
       method:'POST',
       headers:{'Content-Type':'application/json',apikey:CLOUD.cfg.anonKey,Authorization:`Bearer ${CLOUD.cfg.anonKey}`,'x-client-info':'gracie-child-sync/8.9.0'},
       body:JSON.stringify({child_id:cloudId,pin_hash:credential.hash||'',pin_salt:credential.salt||''}),
       cache:'no-store'
     });
-    const data=await response.json();
-    if(!response.ok){throw new Error('child-sync HTTP '+response.status+': '+((data&&data.error)?data.error:JSON.stringify(data)));}
-    let incoming=data&&(data.child_data||data.childData||data.data||data.child||data.state||data);
-    if(!incoming||typeof incoming!=='object')return true;
+    let response=null;
+    try{response=await res.json();}catch(parseErr){response={error:'JSON parse failed: '+(parseErr&&parseErr.message?parseErr.message:parseErr)};}
+    if(!res.ok){
+      console.warn('[child-sync] HTTP error',{status:res.status,error:response&&response.error});
+      throw new Error('child-sync HTTP '+res.status+': '+((response&&response.error)?response.error:JSON.stringify(response)));
+    }
+    let incoming=response&&(response.child_data||response.childData||response.child||response.state||
+      (response.data&&(response.data.child_data||response.data.childData||response.data.child||response.data.state||(response.data.id?response.data:null)))||
+      (response.id?response:null));
+    if(!incoming||typeof incoming!=='object'){console.warn('[child-sync] empty payload',{keys:response&&typeof response==='object'?Object.keys(response):[]});return true;}
     incoming=JSON.parse(JSON.stringify(incoming));
     incoming.id=c.id;incoming.name=c.name;if(c.cred)incoming.cred=c.cred;incoming._cloudId=cloudId;
     incoming=migrateChild(incoming);
-    const incHash=contentHash(normForHash(incoming));
-    const prevHash=contentHash(normForHash(c));
-    if(incHash&&prevHash&&incHash===prevHash){CHILD_SYNC_LAST_HASH=incHash;return true;}
-    if(incHash&&CHILD_SYNC_LAST_HASH===incHash&&prevHash===incHash)return true;
+    const incomingHash=contentHash(normForHash(incoming));
+    const currentHash=contentHash(normForHash(c));
+    /* 仅以 incomingHash===currentHash 判定内容等价；不得因 CHILD_SYNC_LAST_HASH 命中而跳过尚未落地的云端数据。 */
+    if(incomingHash&&currentHash&&incomingHash===currentHash)return true;
     if(!r.childData)r.childData={};
     if(!Array.isArray(r.children))r.children=[];
     r.childData[incoming.id]=incoming;
     if(!r.children.includes(incoming.id))r.children.push(incoming.id);
     r.curChild=incoming.id;CID=incoming.id;CLOUD.childIdMap[incoming.id]=cloudId;
-    CACHE=r;CHILD_SYNC_LAST_HASH=incHash;
-    localSaveRoot(r);
+    CACHE=r;
+    const saved=localSaveRoot(r);
+    if(saved)CHILD_SYNC_LAST_HASH=incomingHash;
     broadcastLocal('root',incoming.id);
     scheduleRender();
+    console.info('[child-sync] applied',{stars:incoming.stars,updatedAt:response&&response.updated_at});
     return true;
-  }catch(e){if(!silent)console.warn('child-sync 异常：',e);return false;}
+  }catch(e){console.warn('[child-sync] exception',{error:e&&e.message?e.message:e});return false;}
   finally{CHILD_SYNC_RUNNING=false;}
 }
 function startChildSyncPolling(){
