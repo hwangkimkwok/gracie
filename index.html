@@ -1042,6 +1042,7 @@ function cloudConfigured(){return !!(CLOUD.cfg && CLOUD.cfg.url && CLOUD.cfg.ano
 function cloudActive(){return CLOUD.enabled && CLOUD.online && !!CLOUD.sb && !!CLOUD.session && !!CLOUD.familyId;}
 /* cloudEngaged：已进入云端模式（已登录家庭账号），不要求当前在线——离线时写操作进 OUTBOX 待补传 */
 function cloudEngaged(){return CLOUD.enabled && !!CLOUD.sb && !!CLOUD.session && !!CLOUD.familyId;}
+function cloudWriteAllowed(){return REALROLE==='parent'||REALROLE==='admin';}
 
 /* ---- 初始化云端客户端（在 init 早期调用，异步） ---- */
 async function cloudInit(){
@@ -1207,6 +1208,7 @@ function localSaveRoot(r){
    v8.3：upsert 前记录本端推送时间戳 CLOUD._lastPushTs[cobj.id]，
    供 onRealtimeStateChange 识别并忽略本端刚写入产生的 Realtime 回推，打断闪烁循环。 */
 async function cloudPushChild(cobj){
+  if(!cloudWriteAllowed()){console.info('[cloud] blocked whole-state push for non-parent role',REALROLE);return false;}
   if(!cloudActive()){pushOutbox('state',cobj.id,cobj);return false;}
   try{
     let cloudId=cobj._cloudId||CLOUD.childIdMap[cobj.id];
@@ -1338,7 +1340,7 @@ async function cloudFlushOutbox(){
   for(const it of items){
     try{
       if(it.kind==='state'){
-        if(cloudActive()){const cobj=(CACHE&&CACHE.childData[it.childLocalId])||it.data;await cloudPushChild(cobj);}
+        if(cloudActive()&&cloudWriteAllowed()){const cobj=(CACHE&&CACHE.childData[it.childLocalId])||it.data;await cloudPushChild(cobj);}
         else remain.push(it);
       }else if(it.kind==='event'){
         /* v8.2：孩子端离线提交补传——重放 child-submit Edge Function
@@ -1479,7 +1481,7 @@ function root(){ if(CACHE)return CACHE; const r=localGetRoot(); if(r)CACHE=r; re
 /* saveRoot()：写 CACHE + 本地持久化 + 跨标签页广播；并把所有孩子推送云端(异步,不阻塞业务) */
 function saveRoot(r){ CACHE=r; localSaveRoot(r);
   try{ broadcastLocal('root',null);
-    if(typeof cloudEngaged==='function'&&cloudEngaged()&&r&&r.childData){ for(const id in r.childData){ cloudPushChild(r.childData[id]); } }
+    if(typeof cloudEngaged==='function'&&cloudEngaged()&&cloudWriteAllowed()&&r&&r.childData){ for(const id in r.childData){ cloudPushChild(r.childData[id]); } }
   }catch(e){}
 }
 function freshChild(name){return{
@@ -1639,7 +1641,7 @@ function R(){let r=root();if(!r){r=initRoot();saveRoot(r);}let dirty=false;
 function child(r,id){return r.childData[id||r.curChild];}
 function saveChild(r,c){ r.childData[c.id]=c; CACHE=r; localSaveRoot(r);
   try{ broadcastLocal('child',c.id);
-    if(typeof cloudEngaged==='function'&&cloudEngaged()){ cloudPushChild(c); }
+    if(typeof cloudEngaged==='function'&&cloudEngaged()&&cloudWriteAllowed()){ cloudPushChild(c); }
   }catch(e){}
 }
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
@@ -2441,14 +2443,18 @@ function pinBack(){PIN_BUF=PIN_BUF.slice(0,-1);drawPinDots();setText('pinErr',''
    云端真正的身份/权限边界是 Supabase Auth 会话(邮箱登录，见 goPin→openAuthModal)+ 服务端 RLS。
    云端已配置时，家长/管理端在进入 PIN 前已被要求完成 Auth 登录；此处 PIN 通过后仅切换本地视图，
    任何云端读写仍受 Auth+RLS 约束，弱 djb2 哈希被绕过也拿不到别家庭数据。 */
-function checkPin(){const r=R();let ok=false;
+async function checkPin(){const r=R();let ok=false;
  if(PIN_TARGET.role==='admin')ok=checkPwd(PIN_BUF,r.adminCred);
  else if(PIN_TARGET.role==='parent')ok=checkPwd(PIN_BUF,r.parentCred);
  else ok=checkPwd(PIN_BUF,r.childData[PIN_TARGET.cid].cred);
  if(ok){
   if(PIN_TARGET.role==='admin'){REALROLE='admin';ROLE='admin';IMP=false;}
   else if(PIN_TARGET.role==='parent'){REALROLE='parent';ROLE='parent';IMP=false;}
-  else{REALROLE='child';ROLE='child';IMP=false;r.curChild=PIN_TARGET.cid;CID=PIN_TARGET.cid;saveRoot(r);}
+  else{
+   stopChildSyncPolling();cloudRemoveRealtime();await cloudSignOutQuiet();
+   CLOUD.familyId=null;CLOUD.inviteCode=null;CLOUD.familyName=null;CLOUD.memberRole=null;CLOUD._needFamily=false;CLOUD.childIdMap={};
+   REALROLE='child';ROLE='child';IMP=false;r.curChild=PIN_TARGET.cid;CID=PIN_TARGET.cid;saveRoot(r);
+  }
   /* 会话只保存"真实身份"；孩子会话永远无法恢复成家长/管理视图 */
   localStorage.setItem(ROOT+'_session',JSON.stringify({realrole:REALROLE,cid:r.curChild}));
   enterApp();
@@ -3469,11 +3475,11 @@ function showTutAlarm(){if(!TUT_ALARM)return;let el=document.getElementById('tut
  el.classList.add('show');TUT_ALARM=null;}
 function hideTutAlarm(){const el=document.getElementById('tutAlarm');if(el)el.classList.remove('show');}
 
-function init(){buildModals();buildHeaderBtns();
+async function init(){buildModals();buildHeaderBtns();
  /* v8.0：预热内存缓存（先用本地，云端 cloudInit 异步刷新后会自动重绘） */
  if(!CACHE){const _l=localGetRoot();if(_l)CACHE=_l;}
- /* 启动云数据层（异步，不阻塞首屏；未配置/离线时自动回退本地模式） */
- try{ cloudInit(); }catch(e){ console.warn('cloudInit error',e); }
+ /* 启动云数据层：等待初始化完成，避免恢复孩子会话时与残留家长 Auth 竞态 */
+ try{ await cloudInit(); }catch(e){ console.warn('cloudInit error',e); }
  /* 实时兜底轮询：云端 Realtime 不可用或本地模式时，每 4 秒比对一次本地快照，发现变化即重绘
     （配合 BroadcastChannel，确保"另一端 5 秒内刷新"在各种环境都成立） */
  startRealtimePollFallback();
@@ -3493,7 +3499,7 @@ function init(){buildModals();buildHeaderBtns();
  });
  const ses=localStorage.getItem(ROOT+'_session');
  renderLogin();
- if(ses){try{const s=JSON.parse(ses);const r=R();const rr=s.realrole||s.role;/*兼容旧会话*/ if(rr==='admin'){REALROLE='admin';ROLE='admin';IMP=false;enterApp();return;}if(rr==='parent'){REALROLE='parent';ROLE='parent';IMP=false;enterApp();return;}if(rr==='child'&&r.childData[s.cid]){REALROLE='child';ROLE='child';IMP=false;r.curChild=s.cid;CID=s.cid;saveRoot(r);enterApp();return;}}catch(e){}}
+ if(ses){try{const s=JSON.parse(ses);const r=R();const rr=s.realrole||s.role;/*兼容旧会话*/ if(rr==='admin'){REALROLE='admin';ROLE='admin';IMP=false;enterApp();return;}if(rr==='parent'){REALROLE='parent';ROLE='parent';IMP=false;enterApp();return;}if(rr==='child'&&r.childData[s.cid]){stopChildSyncPolling();cloudRemoveRealtime();await cloudSignOutQuiet();CLOUD.familyId=null;CLOUD.inviteCode=null;CLOUD.familyName=null;CLOUD.memberRole=null;CLOUD._needFamily=false;CLOUD.childIdMap={};REALROLE='child';ROLE='child';IMP=false;r.curChild=s.cid;CID=s.cid;saveRoot(r);enterApp();return;}}catch(e){}}
  document.getElementById('loginScreen').style.display='block';document.getElementById('mainApp').style.display='none';
 }
 /* ===== v8.0 实时兜底轮询：比对本地快照哈希，变化即重绘（与 BroadcastChannel/Realtime 互补） ===== */

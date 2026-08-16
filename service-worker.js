@@ -6,7 +6,7 @@
  ============================================================ */
 
 const CACHE_PREFIX = 'gracie-pwa-';
-const CACHE_VERSION = 'v8.9.0-20260815-child-sync-6';
+const CACHE_VERSION = 'v8.9.0-20260815-child-sync-7';
 const STATIC_CACHE = `${CACHE_PREFIX}${CACHE_VERSION}-static`;
 const RUNTIME_CACHE = `${CACHE_PREFIX}${CACHE_VERSION}-runtime`;
 
