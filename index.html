@@ -1424,7 +1424,7 @@ async function childSyncPull(silent){
   try{
     const response=await fetch(`${CLOUD.cfg.url}/functions/v1/child-sync`,{
       method:'POST',
-      headers:{'Content-Type':'text/plain;charset=UTF-8'},
+      headers:{'Content-Type':'application/json',apikey:CLOUD.cfg.anonKey,Authorization:`Bearer ${CLOUD.cfg.anonKey}`,'x-client-info':'gracie-child-sync/8.9.0'},
       body:JSON.stringify({child_id:cloudId,pin_hash:credential.hash||'',pin_salt:credential.salt||''}),
       cache:'no-store'
     });
