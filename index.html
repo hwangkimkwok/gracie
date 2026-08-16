@@ -1186,6 +1186,8 @@ function broadcastLocal(kind,childLocalId){
 const _TAB_ID=Math.random().toString(36).slice(2);
 function onLocalBroadcast(ev){
   const m=ev.data;if(!m||m.from===_TAB_ID)return;
+  if(REALROLE==='child'&&ROLE==='child'&&!IMP){childSyncPull(true);return;}
+  if(CHILD_SYNC_APPLYING)return;
   /* 其它标签页改了数据 → 从 localStorage 重载 CACHE → render（实现"另一端实时刷新"） */
   const fresh=localGetRoot();if(fresh){CACHE=fresh;if(typeof ROLE!=='undefined'&&ROLE)scheduleRender();}
 }
@@ -1409,7 +1411,7 @@ async function childSubmitEvent(type,payload){
    用 child_id + PIN hash/salt 自校验拉取服务端权威 child_state；写入本地 CACHE/localStorage
    但绝不调用 saveChild/saveRoot/cloudPushChild，避免把拉取结果反推覆盖云端。
    ==================================================================== */
-let CHILD_SYNC_TIMER=null,CHILD_SYNC_RUNNING=false,CHILD_SYNC_LAST_HASH=null;
+let CHILD_SYNC_TIMER=null,CHILD_SYNC_RUNNING=false,CHILD_SYNC_LAST_HASH=null,CHILD_SYNC_APPLYING=false,CHILD_SYNC_APPLIED_AT=0;
 async function childSyncPull(silent){
   if(!(REALROLE==='child'&&ROLE==='child'&&IMP===false))return false;
   if(CHILD_SYNC_RUNNING)return false;
@@ -1445,6 +1447,7 @@ async function childSyncPull(silent){
     const currentHash=contentHash(normForHash(c));
     /* 仅以 incomingHash===currentHash 判定内容等价；不得因 CHILD_SYNC_LAST_HASH 命中而跳过尚未落地的云端数据。 */
     if(incomingHash&&currentHash&&incomingHash===currentHash)return true;
+    CHILD_SYNC_APPLYING=true;
     if(!r.childData)r.childData={};
     if(!Array.isArray(r.children))r.children=[];
     r.childData[incoming.id]=incoming;
@@ -1453,12 +1456,12 @@ async function childSyncPull(silent){
     CACHE=r;
     const saved=localSaveRoot(r);
     if(saved)CHILD_SYNC_LAST_HASH=incomingHash;
-    broadcastLocal('root',incoming.id);
-    scheduleRender();
+    CHILD_SYNC_APPLIED_AT=Date.now();
+    try{render();}catch(renderErr){console.warn('[child-sync] render error',{error:renderErr&&renderErr.message?renderErr.message:renderErr});scheduleRender();}
     console.info('[child-sync] applied',{stars:incoming.stars,updatedAt:response&&response.updated_at});
     return true;
   }catch(e){console.warn('[child-sync] exception',{error:e&&e.message?e.message:e});return false;}
-  finally{CHILD_SYNC_RUNNING=false;}
+  finally{CHILD_SYNC_RUNNING=false;CHILD_SYNC_APPLYING=false;}
 }
 function startChildSyncPolling(){
   if(!(REALROLE==='child'&&ROLE==='child'&&IMP===false)){stopChildSyncPolling();return;}
@@ -3498,6 +3501,8 @@ let _RT_SNAP=null,_RT_TIMER=null;
 function startRealtimePollFallback(){ if(_RT_TIMER)clearInterval(_RT_TIMER);
   _RT_TIMER=setInterval(()=>{ try{
     if(typeof ROLE==='undefined'||!ROLE)return;
+    if(REALROLE==='child'&&ROLE==='child'&&!IMP){childSyncPull(true);return;}
+    if(CHILD_SYNC_APPLYING)return;
     /* 云端模式：周期性轻量拉取，确保对端变更落地（Realtime 已实时，此为兜底） */
     if(typeof cloudActive==='function'&&cloudActive()){ return; }
     /* 本地/离线模式：检测 localStorage 是否被其它标签页改动 */
