@@ -7,7 +7,7 @@
 const CACHE_PREFIX = 'gracie-pwa-';
 
 const CACHE_VERSION =
-  'v9.0.0-20260816-sync-final-1';
+  'v9.1.0-20260930-screen-rules-1';
 
 const STATIC_CACHE =
   CACHE_PREFIX +
@@ -23,6 +23,7 @@ const CORE_ASSETS = [
   './',
   './index.html',
   './v9-sync-patch.js',
+  './v9.1-screen-rules.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png'
